@@ -16,6 +16,9 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: AyauPlayApi
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
       # ...additional properties...
 
   WAFWebACL:
@@ -66,18 +69,64 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: AyauPlayUserPool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      AliasAttributes:
+        - preferred_username
       # ...additional properties...
 
   MediaLiveChannel:
     Type: AWS::MediaLive::Channel
     Properties:
       Name: AyauPlayMediaLiveChannel
+      InputSpecification:
+        Codec: WAV
+        Resolution: SD
+        MaximumBitrate: MAX_10_MBPS
+      EncoderSettings:
+        AudioDescriptions:
+          - AudioSelectorName: "Default"
+            CodecSettings:
+              AacSettings:
+                Bitrate: 96000
+                CodingMode: CODING_MODE_2_0
+                SampleRate: 48000
+        InputAttachments:
+          - InputId: !Ref MediaLiveInput
+        OutputGroups:
+          - OutputGroupSettings:
+              HlsGroupSettings:
+                Destination:
+                  DestinationRefId: "destination1"
+            Outputs:
+              - OutputSettings:
+                  HlsOutputSettings:
+                    HlsSettings:
+                      StandardHlsSettings:
+                        M3u8Settings:
+                          AudioFramesPerPes: 4
+                          AudioPids: "492-498"
       # ...additional properties...
 
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: AyauPlayLambda
+      Handler: index.handler
+      Role: arn:aws:iam::123456789012:role/execution_role
+      Code:
+        S3Bucket: my-bucket
+        S3Key: lambda-code.zip
+      Runtime: nodejs14.x
       # ...additional properties...
 
   S3Bucket:
@@ -93,18 +142,47 @@ Resources:
         Origins:
           - DomainName: !GetAtt S3Bucket.DomainName
             Id: S3Origin
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true
         # ...additional properties...
 
   RedshiftCluster:
     Type: AWS::Redshift::Cluster
     Properties:
       ClusterIdentifier: ayauplay-cluster
+      NodeType: dc2.large
+      MasterUsername: masteruser
+      MasterUserPassword: masterpassword
+      DBName: ayauplaydb
       # ...additional properties...
 
   CloudWatchDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName: AyauPlayDashboard
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApiGateway", "Count", "ApiName", "AyauPlayApi" ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "API Gateway Requests"
+              }
+            }
+          ]
+        }
       # ...additional properties...
 
 Outputs:

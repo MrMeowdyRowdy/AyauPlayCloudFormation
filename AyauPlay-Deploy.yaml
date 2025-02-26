@@ -1,3 +1,8 @@
 template-file-path: AyauPlay-Template.yaml
-parameters: {}
-tags: {}
+parameters:
+  Environment: development
+  # Add other parameters as needed
+tags:
+  Project: AyauPlay
+  Environment: development
+region: us-east-1
