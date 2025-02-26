@@ -1,8 +1,7 @@
 template-file-path: AyauPlay-Template.yaml
 parameters:
   Environment: development
-  # Add other parameters as needed
-tags:
+  S3BucketName: ayauplay-audio-storage
   Project: AyauPlay
   Environment: development
 region: us-east-1

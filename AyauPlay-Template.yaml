@@ -10,6 +10,9 @@ Parameters:
       - testing
       - production
     Default: development
+  S3BucketName:
+    Type: String
+    Description: Name of the S3 bucket to use as input
 
 Resources:
   ApiGateway:
@@ -19,6 +22,12 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
+      # ...additional properties...
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: "${S3BucketName}"
       # ...additional properties...
 
   WAFWebACL:
@@ -84,6 +93,15 @@ Resources:
         - preferred_username
       # ...additional properties...
 
+  MediaLiveInput:
+    Type: AWS::MediaLive::Input
+    Properties:
+      Name: AyauPlayMediaLiveInput
+      Type: S3
+      Sources:
+        - Url: !Sub "s3://${S3BucketName}/"
+      # ...additional properties...
+
   MediaLiveChannel:
     Type: AWS::MediaLive::Channel
     Properties:
@@ -127,12 +145,6 @@ Resources:
         S3Bucket: my-bucket
         S3Key: lambda-code.zip
       Runtime: nodejs14.x
-      # ...additional properties...
-
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: ayauplay-audio-storage
       # ...additional properties...
 
   CloudFrontDistribution:
