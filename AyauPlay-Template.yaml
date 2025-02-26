@@ -155,3 +155,8 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt UploadSongsLambda.Arn
       Principal: apigateway.amazonaws.com
+
+Outputs:
+  ApiGatewayUrl:
+    Description: "URL for the API Gateway"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload"
