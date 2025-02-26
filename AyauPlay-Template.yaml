@@ -1,3 +1,5 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
 Parameters:
   Environment:
     Type: String
@@ -8,6 +10,9 @@ Parameters:
     Default: dev
 
 Resources:
+  GitSyncSetupWaitCondition:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
   AdminUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
