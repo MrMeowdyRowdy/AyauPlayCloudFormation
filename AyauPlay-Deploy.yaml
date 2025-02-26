@@ -1,3 +1,4 @@
 template-file-path: AyauPlay-Template.yaml
-parameters: {}
+parameters:
+  Environment: dev
 tags: {}

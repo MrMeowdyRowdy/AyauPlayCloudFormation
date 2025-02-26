@@ -29,6 +29,8 @@ Resources:
         - Name: email
           Required: true
           Mutable: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
 
   RegularUserPool:
     Type: AWS::Cognito::UserPool
@@ -51,3 +53,5 @@ Resources:
         - Name: email
           Required: true
           Mutable: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
