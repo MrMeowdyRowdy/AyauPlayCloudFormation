@@ -1,83 +1,21 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: AyauPlay Deployment Template
-
 Parameters:
   Environment:
     Type: String
-    Description: Deployment environment (e.g., development, testing, production)
+    Description: The environment in which this stack is deployed (e.g., dev, prod)
     AllowedValues:
-      - development
-      - testing
-      - production
-    Default: development
-  S3BucketName:
-    Type: String
-    Description: Name of the S3 bucket to use as input
+      - dev
+      - prod
+    Default: dev
 
 Resources:
-  ApiGateway:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: AyauPlayApi
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-      # ...additional properties...
-
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: "${S3BucketName}"
-      # ...additional properties...
-
-  WAFWebACL:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Scope: REGIONAL
-      DefaultAction:
-        Allow: {}
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: AyauPlayWebACL
-      Rules:
-        - Name: AWSManagedRulesCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-        - Name: AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 2
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesKnownBadInputsRuleSet
-        - Name: AWSManagedRulesSQLiRuleSet
-          Priority: 3
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesSQLiRuleSet
-        - Name: AWSManagedRulesLinuxRuleSet
-          Priority: 4
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesLinuxRuleSet
-
-  CognitoUserPool:
+  AdminUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: AyauPlayUserPool
+      UserPoolName: !Sub "AdminUserPool-${Environment}"
+      UsernameAttributes:
+        - email
+      AliasAttributes:
+        - username
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -87,137 +25,29 @@ Resources:
           RequireSymbols: true
       AutoVerifiedAttributes:
         - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+
+  RegularUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "RegularUserPool-${Environment}"
       UsernameAttributes:
         - email
       AliasAttributes:
-        - preferred_username
-      # ...additional properties...
-
-  MediaLiveInput:
-    Type: AWS::MediaLive::Input
-    Properties:
-      Name: AyauPlayMediaLiveInput
-      Type: S3
-      Sources:
-        - Url: !Sub "s3://${S3BucketName}/"
-      # ...additional properties...
-
-  MediaLiveChannel:
-    Type: AWS::MediaLive::Channel
-    Properties:
-      Name: AyauPlayMediaLiveChannel
-      InputSpecification:
-        Codec: WAV
-        Resolution: SD
-        MaximumBitrate: MAX_10_MBPS
-      EncoderSettings:
-        AudioDescriptions:
-          - AudioSelectorName: "Default"
-            CodecSettings:
-              AacSettings:
-                Bitrate: 96000
-                CodingMode: CODING_MODE_2_0
-                SampleRate: 48000
-        InputAttachments:
-          - InputId: !Ref MediaLiveInput
-        OutputGroups:
-          - OutputGroupSettings:
-              HlsGroupSettings:
-                Destination:
-                  DestinationRefId: "destination1"
-            Outputs:
-              - OutputSettings:
-                  HlsOutputSettings:
-                    HlsSettings:
-                      StandardHlsSettings:
-                        M3u8Settings:
-                          AudioFramesPerPes: 4
-                          AudioPids: "492-498"
-      # ...additional properties...
-
-  LambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: AyauPlayLambda
-      Handler: index.handler
-      Role: arn:aws:iam::123456789012:role/execution_role
-      Code:
-        S3Bucket: my-bucket
-        S3Key: lambda-code.zip
-      Runtime: nodejs14.x
-      # ...additional properties...
-
-  CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Origins:
-          - DomainName: !GetAtt S3Bucket.DomainName
-            Id: S3Origin
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-        Enabled: true
-        # ...additional properties...
-
-  RedshiftCluster:
-    Type: AWS::Redshift::Cluster
-    Properties:
-      ClusterIdentifier: ayauplay-cluster
-      NodeType: dc2.large
-      MasterUsername: masteruser
-      MasterUserPassword: masterpassword
-      DBName: ayauplaydb
-      # ...additional properties...
-
-  CloudWatchDashboard:
-    Type: AWS::CloudWatch::Dashboard
-    Properties:
-      DashboardName: AyauPlayDashboard
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "x": 0,
-              "y": 0,
-              "width": 24,
-              "height": 6,
-              "properties": {
-                "metrics": [
-                  [ "AWS/ApiGateway", "Count", "ApiName", "AyauPlayApi" ]
-                ],
-                "period": 300,
-                "stat": "Sum",
-                "region": "${AWS::Region}",
-                "title": "API Gateway Requests"
-              }
-            }
-          ]
-        }
-      # ...additional properties...
-
-Outputs:
-  ApiGatewayUrl:
-    Description: "URL of the API Gateway"
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
-    Export:
-      Name: ApiGatewayUrl
-
-  S3BucketName:
-    Description: "Name of the S3 bucket"
-    Value: !Ref S3Bucket
-    Export:
-      Name: S3BucketName
-
-  RedshiftClusterEndpoint:
-    Description: "Endpoint of the Redshift cluster"
-    Value: !GetAtt RedshiftCluster.Endpoint.Address
-    Export:
-      Name: RedshiftClusterEndpoint
-
-  CloudFrontDistributionId:
-    Description: "ID of the CloudFront distribution"
-    Value: !Ref CloudFrontDistribution
-    Export:
-      Name: CloudFrontDistributionId
+        - username
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
