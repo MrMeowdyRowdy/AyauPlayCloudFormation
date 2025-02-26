@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AyauPlay Deployment Template
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment (e.g., development, testing, production)
+    AllowedValues:
+      - development
+      - testing
+      - production
+    Default: development
+
+Resources:
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: AyauPlayApi
+      # ...additional properties...
+
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: AyauPlayWebACL
+      Rules:
+        # ...WAF rules...
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: AyauPlayUserPool
+      # ...additional properties...
+
+  MediaLiveChannel:
+    Type: AWS::MediaLive::Channel
+    Properties:
+      Name: AyauPlayMediaLiveChannel
+      # ...additional properties...
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: AyauPlayLambda
+      # ...additional properties...
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: ayauplay-audio-storage
+      # ...additional properties...
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt S3Bucket.DomainName
+            Id: S3Origin
+        # ...additional properties...
+
+  RedshiftCluster:
+    Type: AWS::Redshift::Cluster
+    Properties:
+      ClusterIdentifier: ayauplay-cluster
+      # ...additional properties...
+
+  CloudWatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: AyauPlayDashboard
+      # ...additional properties...
+
+Outputs:
+  ApiGatewayUrl:
+    Description: "URL of the API Gateway"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+    Export:
+      Name: ApiGatewayUrl
+
+  S3BucketName:
+    Description: "Name of the S3 bucket"
+    Value: !Ref S3Bucket
+    Export:
+      Name: S3BucketName
+
+  RedshiftClusterEndpoint:
+    Description: "Endpoint of the Redshift cluster"
+    Value: !GetAtt RedshiftCluster.Endpoint.Address
+    Export:
+      Name: RedshiftClusterEndpoint
+
+  CloudFrontDistributionId:
+    Description: "ID of the CloudFront distribution"
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: CloudFrontDistributionId
