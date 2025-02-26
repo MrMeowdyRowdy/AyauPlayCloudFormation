@@ -14,10 +14,9 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Sub "AdminUserPool-${Environment}"
-      UsernameAttributes:
-        - email
       AliasAttributes:
         - preferred_username
+        - email
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -38,10 +37,9 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Sub "RegularUserPool-${Environment}"
-      UsernameAttributes:
-        - email
       AliasAttributes:
         - preferred_username
+        - email
       Policies:
         PasswordPolicy:
           MinimumLength: 8
