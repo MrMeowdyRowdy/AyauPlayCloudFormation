@@ -20,7 +20,7 @@ Resources:
       UsernameAttributes:
         - email
       AliasAttributes:
-        - username
+        - preferred_username
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -44,7 +44,7 @@ Resources:
       UsernameAttributes:
         - email
       AliasAttributes:
-        - username
+        - preferred_username
       Policies:
         PasswordPolicy:
           MinimumLength: 8
