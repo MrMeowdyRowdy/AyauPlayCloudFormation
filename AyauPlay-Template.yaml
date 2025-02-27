@@ -10,10 +10,10 @@ Parameters:
     Default: dev
 
 Resources:
-  AdminUserPool:
+  UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub "AdminUserPool-${Environment}"
+      UserPoolName: !Sub "UserPool-${Environment}"
       AliasAttributes:
         - preferred_username
         - email
@@ -33,28 +33,19 @@ Resources:
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: true
 
-  RegularUserPool:
-    Type: AWS::Cognito::UserPool
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
     Properties:
-      UserPoolName: !Sub "RegularUserPool-${Environment}"
-      AliasAttributes:
-        - preferred_username
-        - email
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-          RequireUppercase: true
-          RequireLowercase: true
-          RequireNumbers: true
-          RequireSymbols: true
-      AutoVerifiedAttributes:
-        - email
-      Schema:
-        - Name: email
-          Required: true
-          Mutable: true
-      AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
+      GroupName: admin
+      UserPoolId: !Ref UserPool
+      Description: "Admin group with elevated permissions"
+
+  ClientGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: client
+      UserPoolId: !Ref UserPool
+      Description: "Client group with standard permissions"
 
   SongsBucket:
     Type: AWS::S3::Bucket
@@ -147,7 +138,7 @@ Resources:
       RestApiId: !Ref ApiGateway
       Type: COGNITO_USER_POOLS
       ProviderARNs:
-        - !GetAtt AdminUserPool.Arn
+        - !GetAtt UserPool.Arn
 
   LambdaPermission:
     Type: AWS::Lambda::Permission
