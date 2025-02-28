@@ -10,54 +10,59 @@ Parameters:
     Default: dev
 
 Resources:
+  # Cognito User Pool for user authentication
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub UserPool-${Environment}
+      UserPoolName: !Sub UserPool-${Environment}  # Name of the user pool
       AliasAttributes:
         - preferred_username
         - email
       Policies:
         PasswordPolicy:
-          MinimumLength: 8
-          RequireUppercase: true
-          RequireLowercase: true
-          RequireNumbers: true
-          RequireSymbols: true
+          MinimumLength: 8  # Minimum password length
+          RequireUppercase: true  # Require at least one uppercase letter
+          RequireLowercase: true  # Require at least one lowercase letter
+          RequireNumbers: true  # Require at least one number
+          RequireSymbols: true  # Require at least one symbol
       AutoVerifiedAttributes:
-        - email
+        - email  # Automatically verify email addresses
       Schema:
         - Name: email
-          Required: true
-          Mutable: true
+          Required: true  # Email is required
+          Mutable: true  # Email can be updated
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
+        AllowAdminCreateUserOnly: true  # Only admins can create users
 
+  # Admin group with elevated permissions
   AdminGroup:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
-      GroupName: admin
-      UserPoolId: !Ref UserPool
+      GroupName: admin  # Name of the group
+      UserPoolId: !Ref UserPool  # Reference to the user pool
       Description: Admin group with elevated permissions
 
+  # Client group with standard permissions
   ClientGroup:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
-      GroupName: client
-      UserPoolId: !Ref UserPool
+      GroupName: client  # Name of the group
+      UserPoolId: !Ref UserPool  # Reference to the user pool
       Description: Client group with standard permissions
 
+  # S3 bucket to store uploaded songs
   SongsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub songs-bucket-${Environment}
+      BucketName: !Sub songs-bucket-${Environment}  # Name of the S3 bucket
 
+  # Lambda function to handle song uploads
   UploadSongsLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub UploadSongsLambda-${Environment}
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: !Sub UploadSongsLambda-${Environment}  # Name of the Lambda function
+      Handler: index.handler  # Handler method
+      Role: !GetAtt LambdaExecutionRole.Arn  # IAM role for the Lambda function
       Code:
         ZipFile: |
           import json
@@ -78,11 +83,12 @@ Resources:
                   'statusCode': 200,
                   'body': json.dumps('File uploaded successfully')
               }
-      Runtime: python3.8
+      Runtime: python3.8  # Runtime environment
       Environment:
         Variables:
-          BUCKET_NAME: !Ref SongsBucket
+          BUCKET_NAME: !Ref SongsBucket  # Environment variable for the bucket name
 
+  # IAM role for the Lambda function
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -100,78 +106,86 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:PutObject
-                Resource: !Sub arn:aws:s3:::${SongsBucket}/*
+                  - s3:PutObject  # Allow Lambda to put objects in S3
+                Resource: !Sub arn:aws:s3:::${SongsBucket}/*  # S3 bucket ARN
 
+  # API Gateway to expose the Lambda function
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub UploadSongsApi-${Environment}
+      Name: !Sub UploadSongsApi-${Environment}  # Name of the API Gateway
 
+  # API Gateway resource for the upload endpoint
   ApiGatewayResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: upload
-      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId  # Root resource ID
+      PathPart: upload  # Path part for the resource
+      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
 
+  # API Gateway method for the upload endpoint
   ApiGatewayMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref ApiGatewayAuthorizer
-      HttpMethod: POST
-      ResourceId: !Ref ApiGatewayResource
-      RestApiId: !Ref ApiGateway
+      AuthorizationType: COGNITO_USER_POOLS  # Use Cognito user pools for authorization
+      AuthorizerId: !Ref ApiGatewayAuthorizer  # Reference to the authorizer
+      HttpMethod: POST  # HTTP method
+      ResourceId: !Ref ApiGatewayResource  # Reference to the resource
+      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
       Integration:
-        IntegrationHttpMethod: POST
-        Type: AWS_PROXY
+        IntegrationHttpMethod: POST  # HTTP method for integration
+        Type: AWS_PROXY  # Use AWS_PROXY integration type
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
-          - LambdaArn: !GetAtt UploadSongsLambda.Arn
+          - LambdaArn: !GetAtt UploadSongsLambda.Arn  # Lambda function ARN
 
+  # Cognito authorizer for the API Gateway
   ApiGatewayAuthorizer:
     Type: AWS::ApiGateway::Authorizer
     Properties:
-      Name: CognitoAuthorizer
-      IdentitySource: method.request.header.Authorization
-      RestApiId: !Ref ApiGateway
-      Type: COGNITO_USER_POOLS
+      Name: CognitoAuthorizer  # Name of the authorizer
+      IdentitySource: method.request.header.Authorization  # Identity source for authorization
+      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
+      Type: COGNITO_USER_POOLS  # Use Cognito user pools
       ProviderARNs:
-        - !GetAtt UserPool.Arn
+        - !GetAtt UserPool.Arn  # ARN of the user pool
 
+  # Permission for API Gateway to invoke the Lambda function
   LambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt UploadSongsLambda.Arn
-      Principal: apigateway.amazonaws.com
+      Action: lambda:InvokeFunction  # Allow invocation of the Lambda function
+      FunctionName: !GetAtt UploadSongsLambda.Arn  # Lambda function ARN
+      Principal: apigateway.amazonaws.com  # Principal for API Gateway
 
+  # WAF WebACL to protect the API Gateway
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub WebACL-${Environment}
-      Scope: REGIONAL
+      Name: !Sub WebACL-${Environment}  # Name of the WebACL
+      Scope: REGIONAL  # Scope of the WebACL
       DefaultAction:
-        Block: {}
+        Block: {}  # Default action is to block requests
       VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub WebACL-${Environment}
+        SampledRequestsEnabled: true  # Enable sampling of requests
+        CloudWatchMetricsEnabled: true  # Enable CloudWatch metrics
+        MetricName: !Sub WebACL-${Environment}  # Metric name
       Rules:
+        # Rate limiting rule to prevent DDoS attacks
         - Name: RateLimitRule
           Priority: 1
           Action:
             Block: {}
           Statement:
             RateBasedStatement:
-              Limit: 100
-              AggregateKeyType: IP
+              Limit: 100  # Limit to 100 requests per 5 minutes
+              AggregateKeyType: IP  # Aggregate by IP address
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: RateLimitRule
             
+        # Rule to block requests with body size greater than 50MB
         - Name: MaxFileSize
           Priority: 2
           Action:
@@ -190,13 +204,14 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: MaxFileSize
 
+        # Rule to allow only .wav files based on content-type header
         - Name: WavFileOnly
           Priority: 3
           Action:
             Block: {}
           Statement:
             ByteMatchStatement:
-              SearchString: audio/wav
+              SearchString: audio/wav  # Match content-type header for .wav files
               FieldToMatch:
                 SingleHeader:
                   Name: content-type
@@ -209,6 +224,7 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: WavFileOnly
 
+        # AWS managed rule group for account takeover prevention
         - Name: AWS-AWSManagedRulesATPRuleSet
           Priority: 4
           OverrideAction:
@@ -217,11 +233,15 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesATPRuleSet
+              ManagedRuleGroupConfigs:
+                - LoginPath: /upload  # Path for login attempts
+                  PayloadType: FORM_ENCODED  # Payload type for form-encoded data
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesATPRuleSet
 
+        # AWS managed rule group for known bad inputs
         - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
           Priority: 5
           OverrideAction:
@@ -230,11 +250,13 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesKnownBadInputsRuleSet
+              ManagedRuleGroupConfigs: []
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesKnownBadInputsRuleSet
 
+        # AWS managed rule group for common security threats
         - Name: AWS-AWSManagedRulesCommonRuleSet
           Priority: 6
           OverrideAction:
@@ -272,29 +294,33 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesKnownBadInputsRuleSet
 
+  # API Gateway stage configuration
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
     Properties:
-      StageName: !Ref Environment
-      RestApiId: !Ref ApiGateway
-      DeploymentId: !Ref ApiGatewayDeployment
+      StageName: !Ref Environment  # Stage name
+      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
+      DeploymentId: !Ref ApiGatewayDeployment  # Reference to the deployment
 
+  # API Gateway deployment configuration
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
-      RestApiId: !Ref ApiGateway
-    DependsOn: ApiGatewayMethod
+      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
+    DependsOn: ApiGatewayMethod  # Depends on the method being created
 
+  # WAF WebACL association with the API Gateway stage
   WAFWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/restapis/${ApiGateway}/stages/${Environment}
-      WebACLArn: !GetAtt WAFWebACL.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/restapis/${ApiGateway}/stages/${Environment}  # API Gateway stage ARN
+      WebACLArn: !GetAtt WAFWebACL.Arn  # WebACL ARN
     DependsOn: 
-      - ApiGatewayStage
-      - ApiGatewayDeployment
+      - ApiGatewayStage  # Depends on the stage being created
+      - ApiGatewayDeployment  # Depends on the deployment being created
 
 Outputs:
+  # Output the URL for the API Gateway
   ApiGatewayUrl:
     Description: URL for the API Gateway
     Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload
