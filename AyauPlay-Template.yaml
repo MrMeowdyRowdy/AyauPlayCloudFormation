@@ -153,7 +153,7 @@ Resources:
       Name: !Sub WebACL-${Environment}
       Scope: REGIONAL
       DefaultAction:
-        Allow: {}
+        Block: {}
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
@@ -171,13 +171,36 @@ Resources:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesCommonRuleSet
+        - Name: AWS-AWSManagedRulesSQLiRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesSQLiRuleSet
+        - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesKnownBadInputsRuleSet
 
   WAFWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${ApiGatewayStage}
       WebACLArn: !Ref WAFWebACL
-    DependsOn: ApiGatewayStage
 
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
