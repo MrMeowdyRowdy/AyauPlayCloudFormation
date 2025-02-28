@@ -265,22 +265,11 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
+              ManagedRuleGroupConfigs: []
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesCommonRuleSet
-        - Name: AWS-AWSManagedRulesSQLiRuleSet
-          Priority: 7
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesSQLiRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesSQLiRuleSet
         - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
           Priority: 8
           OverrideAction:
