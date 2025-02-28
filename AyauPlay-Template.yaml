@@ -285,23 +285,9 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesKnownBadInputsRuleSet
 
-        # AWS managed rule group for common security threats
-        - Name: AWS-AWSManagedRulesCommonRuleSet
-          Priority: 6
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesCommonRuleSet
-
         # AWS managed rule group for SQL injection protection
         - Name: AWS-AWSManagedRulesSQLiRuleSet
-          Priority: 7
+          Priority: 6
           OverrideAction:
             None: {}
           Statement:
