@@ -13,7 +13,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub "UserPool-${Environment}"
+      UserPoolName: !Sub UserPool-${Environment}
       AliasAttributes:
         - preferred_username
         - email
@@ -38,24 +38,24 @@ Resources:
     Properties:
       GroupName: admin
       UserPoolId: !Ref UserPool
-      Description: "Admin group with elevated permissions"
+      Description: Admin group with elevated permissions
 
   ClientGroup:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
       GroupName: client
       UserPoolId: !Ref UserPool
-      Description: "Client group with standard permissions"
+      Description: Client group with standard permissions
 
   SongsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "songs-bucket-${Environment}"
+      BucketName: !Sub songs-bucket-${Environment}
 
   UploadSongsLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "UploadSongsLambda-${Environment}"
+      FunctionName: !Sub UploadSongsLambda-${Environment}
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -101,12 +101,12 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${SongsBucket}/*"
+                Resource: !Sub arn:aws:s3:::${SongsBucket}/*
 
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub "UploadSongsApi-${Environment}"
+      Name: !Sub UploadSongsApi-${Environment}
 
   ApiGatewayResource:
     Type: AWS::ApiGateway::Resource
@@ -150,14 +150,14 @@ Resources:
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub "WebACL-${Environment}"
+      Name: !Sub WebACL-${Environment}
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub "WebACL-${Environment}"
+        MetricName: !Sub WebACL-${Environment}
       Rules:
         - Name: AWS-AWSManagedRulesCommonRuleSet
           Priority: 1
@@ -175,7 +175,7 @@ Resources:
   WAFWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !Sub "arn:aws:apigateway:${AWS::Region}/restapis/${ApiGateway}/stages/${Environment}"
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}
       WebACLArn: !Ref WAFWebACL
     DependsOn: ApiGatewayStage
 
@@ -194,5 +194,5 @@ Resources:
 
 Outputs:
   ApiGatewayUrl:
-    Description: "URL for the API Gateway"
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload"
+    Description: URL for the API Gateway
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload
