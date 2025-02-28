@@ -68,21 +68,43 @@ Resources:
           import json
           import boto3
           import base64
+          import os
 
           s3 = boto3.client('s3')
 
+          def is_valid_wav(filename):
+              return filename.lower().endswith('.wav')
+
           def handler(event, context):
-              body = json.loads(event['body'])
-              file_content = base64.b64decode(body['file'])
-              file_name = body['fileName']
-              bucket_name = "${SongsBucket}"
+              try:
+                  body = json.loads(event['body'])
+                  file_content = base64.b64decode(body['file'])
+                  file_name = body['fileName']
+                  
+                  if not is_valid_wav(file_name):
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps('Only .wav files are allowed')
+                      }
 
-              s3.put_object(Bucket=bucket_name, Key=file_name, Body=file_content)
+                  bucket_name = "${SongsBucket}"
+                  
+                  s3.put_object(
+                      Bucket=bucket_name,
+                      Key=file_name,
+                      Body=file_content,
+                      ContentType='audio/wav'
+                  )
 
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps('File uploaded successfully')
-              }
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps('File uploaded successfully')
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
+                  }
       Runtime: python3.8  # Runtime environment
       Environment:
         Variables:
@@ -204,21 +226,32 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: MaxFileSize
 
-        # Rule to allow only .wav files based on content-type header
+        # Content type validation for WAV files
         - Name: WavFileOnly
           Priority: 3
           Action:
             Block: {}
           Statement:
-            ByteMatchStatement:
-              SearchString: audio/wav  # Match content-type header for .wav files
-              FieldToMatch:
-                SingleHeader:
-                  Name: content-type
-              TextTransformations:
-                - Priority: 1
-                  Type: LOWERCASE
-              PositionalConstraint: EXACTLY
+            OrStatement:
+              Statements:
+                - ByteMatchStatement:
+                    SearchString: audio/wav
+                    FieldToMatch:
+                      SingleHeader:
+                        Name: content-type
+                    TextTransformations:
+                      - Priority: 1
+                        Type: LOWERCASE
+                    PositionalConstraint: EXACTLY
+                - ByteMatchStatement:
+                    SearchString: multipart/form-data
+                    FieldToMatch:
+                      SingleHeader:
+                        Name: content-type
+                    TextTransformations:
+                      - Priority: 1
+                        Type: LOWERCASE
+                    PositionalConstraint: CONTAINS
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
@@ -234,8 +267,7 @@ Resources:
               VendorName: AWS
               Name: AWSManagedRulesATPRuleSet
               ManagedRuleGroupConfigs:
-                - LoginPath: /upload  # Path for login attempts
-                  PayloadType: FORM_ENCODED  # Payload type for form-encoded data
+                - LoginPath: /upload
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
@@ -250,7 +282,6 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesKnownBadInputsRuleSet
-              ManagedRuleGroupConfigs: []
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
@@ -265,23 +296,24 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
-              ManagedRuleGroupConfigs: []
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesCommonRuleSet
-        - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 8
+
+        # AWS managed rule group for SQL injection protection
+        - Name: AWS-AWSManagedRulesSQLiRuleSet
+          Priority: 7
           OverrideAction:
             None: {}
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
-              Name: AWSManagedRulesKnownBadInputsRuleSet
+              Name: AWSManagedRulesSQLiRuleSet
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesKnownBadInputsRuleSet
+            MetricName: AWSManagedRulesSQLiRuleSet
 
   # API Gateway stage configuration
   ApiGatewayStage:
