@@ -177,7 +177,7 @@ Resources:
     Properties:
       ResourceArn: !Sub "arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}"
       WebACLArn: !Ref WAFWebACL
-    DependsOn: ApiGatewayDeployment
+    DependsOn: ApiGatewayStage
 
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
