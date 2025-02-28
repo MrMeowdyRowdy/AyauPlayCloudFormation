@@ -212,13 +212,11 @@ Resources:
   WAFWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}
-      WebACLArn: !Ref WAFWebACL
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/restapis/${ApiGateway}/stages/${Environment}
+      WebACLArn: !GetAtt WAFWebACL.Arn
     DependsOn: 
       - ApiGatewayStage
       - ApiGatewayDeployment
-
-
 
 Outputs:
   ApiGatewayUrl:
