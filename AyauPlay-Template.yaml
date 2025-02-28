@@ -257,21 +257,19 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: WavFileOnly
 
-        # AWS managed rule group for account takeover prevention
-        - Name: AWS-AWSManagedRulesATPRuleSet
+        # AWS managed rule group for common security threats
+        - Name: AWS-AWSManagedRulesCommonRuleSet
           Priority: 4
           OverrideAction:
             None: {}
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
-              Name: AWSManagedRulesATPRuleSet
-              ManagedRuleGroupConfigs:
-                - LoginPath: /upload
+              Name: AWSManagedRulesCommonRuleSet
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesATPRuleSet
+            MetricName: AWSManagedRulesCommonRuleSet
 
         # AWS managed rule group for known bad inputs
         - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
