@@ -203,18 +203,22 @@ Resources:
       RestApiId: !Ref ApiGateway
       DeploymentId: !Ref ApiGatewayDeployment
 
-  WAFWebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}
-      WebACLArn: !Ref WAFWebACL
-    DependsOn: ApiGatewayDeployment
-
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref ApiGateway
     DependsOn: ApiGatewayMethod
+
+  WAFWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}
+      WebACLArn: !Ref WAFWebACL
+    DependsOn: 
+      - ApiGatewayStage
+      - ApiGatewayDeployment
+
+
 
 Outputs:
   ApiGatewayUrl:
