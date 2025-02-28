@@ -196,18 +196,19 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesKnownBadInputsRuleSet
 
-  WAFWebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}
-      WebACLArn: !Ref WAFWebACL
-
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: !Ref Environment
       RestApiId: !Ref ApiGateway
       DeploymentId: !Ref ApiGatewayDeployment
+
+  WAFWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}
+      WebACLArn: !Ref WAFWebACL
+    DependsOn: ApiGatewayDeployment
 
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
