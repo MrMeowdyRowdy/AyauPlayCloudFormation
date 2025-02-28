@@ -159,8 +159,84 @@ Resources:
         CloudWatchMetricsEnabled: true
         MetricName: !Sub WebACL-${Environment}
       Rules:
-        - Name: AWS-AWSManagedRulesCommonRuleSet
+        - Name: RateLimitRule
           Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRule
+            
+        - Name: MaxFileSize
+          Priority: 2
+          Action:
+            Block: {}
+          Statement:
+            SizeConstraintStatement:
+              ComparisonOperator: GT
+              Size: 52428800  # 50MB max file size
+              FieldToMatch:
+                Body: {}
+              TextTransformations:
+                - Type: NONE
+                  Priority: 1
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: MaxFileSize
+
+        - Name: WavFileOnly
+          Priority: 3
+          Action:
+            Block: {}
+          Statement:
+            ByteMatchStatement:
+              SearchString: audio/wav
+              FieldToMatch:
+                SingleHeader:
+                  Name: content-type
+              TextTransformations:
+                - Priority: 1
+                  Type: LOWERCASE
+              PositionalConstraint: EXACTLY
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: WavFileOnly
+
+        - Name: AWS-AWSManagedRulesATPRuleSet
+          Priority: 4
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesATPRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesATPRuleSet
+
+        - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 5
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesKnownBadInputsRuleSet
+
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 6
           OverrideAction:
             None: {}
           Statement:
@@ -172,7 +248,7 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesCommonRuleSet
         - Name: AWS-AWSManagedRulesSQLiRuleSet
-          Priority: 2
+          Priority: 7
           OverrideAction:
             None: {}
           Statement:
@@ -184,7 +260,7 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesSQLiRuleSet
         - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 3
+          Priority: 8
           OverrideAction:
             None: {}
           Statement:
