@@ -69,11 +69,23 @@ Resources:
           import boto3
           import base64
           import os
+          import mimetypes
 
           s3 = boto3.client('s3')
 
-          def is_valid_wav(filename):
-              return filename.lower().endswith('.wav')
+          ALLOWED_EXTENSIONS = {'.wav', '.mp3'}
+          CONTENT_TYPES = {
+              '.wav': 'audio/wav',
+              '.mp3': 'audio/mpeg'
+          }
+
+          def is_valid_audio(filename):
+              ext = os.path.splitext(filename)[1].lower()
+              return ext in ALLOWED_EXTENSIONS
+
+          def get_content_type(filename):
+              ext = os.path.splitext(filename)[1].lower()
+              return CONTENT_TYPES.get(ext, 'application/octet-stream')
 
           def handler(event, context):
               try:
@@ -81,10 +93,10 @@ Resources:
                   file_content = base64.b64decode(body['file'])
                   file_name = body['fileName']
                   
-                  if not is_valid_wav(file_name):
+                  if not is_valid_audio(file_name):
                       return {
                           'statusCode': 400,
-                          'body': json.dumps('Only .wav files are allowed')
+                          'body': json.dumps('Only .wav and .mp3 files are allowed')
                       }
 
                   bucket_name = "${SongsBucket}"
@@ -93,7 +105,7 @@ Resources:
                       Bucket=bucket_name,
                       Key=file_name,
                       Body=file_content,
-                      ContentType='audio/wav'
+                      ContentType=get_content_type(file_name)
                   )
 
                   return {
@@ -226,8 +238,8 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: MaxFileSize
 
-        # Content type validation for WAV files
-        - Name: WavFileOnly
+        # Content type validation for audio files
+        - Name: AudioFilesOnly
           Priority: 3
           Action:
             Block: {}
@@ -236,6 +248,15 @@ Resources:
               Statements:
                 - ByteMatchStatement:
                     SearchString: audio/wav
+                    FieldToMatch:
+                      SingleHeader:
+                        Name: content-type
+                    TextTransformations:
+                      - Priority: 1
+                        Type: LOWERCASE
+                    PositionalConstraint: EXACTLY
+                - ByteMatchStatement:
+                    SearchString: audio/mpeg
                     FieldToMatch:
                       SingleHeader:
                         Name: content-type
@@ -255,7 +276,7 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: WavFileOnly
+            MetricName: AudioFilesOnly
 
         # AWS managed rule group for common security threats
         - Name: AWS-AWSManagedRulesCommonRuleSet
