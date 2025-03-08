@@ -8,6 +8,9 @@ Parameters:
       - dev
       - prod
     Default: dev
+  CloudFrontKeyPairId:
+    Type: String
+    Description: The ID of the CloudFront key pair used for signed URLs
 
 Resources:
   # Cognito User Pool for user authentication
@@ -61,6 +64,65 @@ Resources:
             AllowedMethods: [GET, PUT, POST, DELETE]
             AllowedOrigins: ['*']
             MaxAge: 3000
+
+  # CloudFront Origin Access Control
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub OAC-songs-${Environment}
+        Description: Origin Access Control for Songs Bucket
+        SigningProtocol: sigv4
+        SigningBehavior: always
+        OriginAccessControlOriginType: s3
+
+  # CloudFront distribution for song streaming
+  SongsDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: ''
+        Origins:
+          - DomainName: !GetAtt SongsBucket.RegionalDomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: https-only
+          TrustedSigners:
+            - self
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+  # Update S3 bucket policy to allow CloudFront access
+  SongsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SongsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${SongsBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SongsDistribution.Id}
 
   # Lambda function to handle song uploads
   UploadSongsLambda:
@@ -145,6 +207,16 @@ Resources:
           s3 = boto3.client('s3')
           bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
 
+          lambda_client = boto3.client('lambda')
+          
+          def get_signed_url(object_key):
+              response = lambda_client.invoke(
+                  FunctionName=os.environ['SIGNED_URL_LAMBDA'],
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps({'object_key': object_key})
+              )
+              return json.loads(response['Payload'].read())
+
           def list_playlists(user_id, is_admin):
               # For admins, list all playlists (top-level folders)
               # For regular users, list only allowed playlists
@@ -170,9 +242,10 @@ Resources:
               for obj in response.get('Contents', []):
                   song_key = obj['Key']
                   if song_key.endswith(('.wav', '.mp3', '.aac')):
+                      signed_url = get_signed_url(song_key)
                       songs.append({
                           'name': song_key.split('/')[-1],
-                          'url': f"https://{bucket_name}.s3.amazonaws.com/{song_key}"
+                          'url': signed_url
                       })
               
               return {"songs": songs}
@@ -212,6 +285,57 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
+          SIGNED_URL_LAMBDA: !Ref SignedUrlLambda
+
+  # Lambda for generating signed URLs
+  SignedUrlLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub SignedUrlLambda-${Environment}
+      Handler: index.handler
+      Role: !GetAtt SignedUrlLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from botocore.signers import CloudFrontSigner
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.backends import default_backend
+          from datetime import datetime, timedelta
+          import rsa
+
+          def handler(event, context):
+              object_key = event['object_key']
+              distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
+              url = f"https://{distribution_domain}/{object_key}"
+              
+              # Get private key from SSM Parameter Store
+              ssm = boto3.client('ssm')
+              key_param = ssm.get_parameter(Name=os.environ['PRIVATE_KEY_PARAM'], WithDecryption=True)
+              private_key = serialization.load_pem_private_key(
+                  key_param['Parameter']['Value'].encode('utf-8'),
+                  password=None,
+                  backend=default_backend()
+              )
+              
+              # Create CloudFront signer
+              key_id = os.environ['KEY_PAIR_ID']
+              expire_date = datetime.utcnow() + timedelta(minutes=5)
+              
+              signer = CloudFrontSigner(key_id, private_key.sign_msg)
+              signed_url = signer.generate_presigned_url(
+                  url,
+                  date_less_than=expire_date
+              )
+              
+              return signed_url
+      Runtime: python3.8
+      Environment:
+        Variables:
+          CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
+          PRIVATE_KEY_PARAM: !Sub /cloudfront/${Environment}/private-key
+          KEY_PAIR_ID: !Ref CloudFrontKeyPairId
 
   # IAM role for the Lambda function
   LambdaExecutionRole:
@@ -257,6 +381,27 @@ Resources:
                 Resource: 
                   - !Sub arn:aws:s3:::${SongsBucket}
                   - !Sub arn:aws:s3:::${SongsBucket}/*
+
+  # IAM role for SignedUrlLambda
+  SignedUrlLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SSMAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloudfront/${Environment}/*
 
   # API Gateway to expose the Lambda function
   ApiGateway:
@@ -510,3 +655,7 @@ Outputs:
   PlaylistApiUrl:
     Description: URL for the Playlist API Gateway
     Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/playlists
+
+  CloudFrontDomain:
+    Description: CloudFront Distribution Domain Name
+    Value: !GetAtt SongsDistribution.DomainName
