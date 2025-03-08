@@ -55,6 +55,12 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub songs-bucket-${Environment}  # Name of the S3 bucket
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
 
   # Lambda function to handle song uploads
   UploadSongsLambda:
@@ -123,6 +129,90 @@ Resources:
         Variables:
           BUCKET_NAME: !Ref SongsBucket  # Environment variable for the bucket name
 
+  # Lambda for playlist management
+  PlaylistManagementLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub PlaylistManagementLambda-${Environment}
+      Handler: index.handler
+      Role: !GetAtt PlaylistLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          s3 = boto3.client('s3')
+          bucket_name = os.environ['BUCKET_NAME']  # Changed to use same bucket as songs
+
+          def list_playlists(user_id, is_admin):
+              # For admins, list all playlists (top-level folders)
+              # For regular users, list only allowed playlists
+              prefix = "playlists/" if is_admin else f"playlists/{user_id}/"
+              response = s3.list_objects_v2(Bucket=bucket_name, Delimiter='/', Prefix=prefix)
+              playlists = []
+              
+              for prefix in response.get('CommonPrefixes', []):
+                  playlist_path = prefix.get('Prefix', '').rstrip('/')
+                  playlist_name = playlist_path.split('/')[-1]
+                  playlists.append(playlist_name)
+              
+              return {"playlists": playlists}
+
+          def get_playlist_songs(user_id, playlist_name, is_admin):
+              # Verify access rights
+              prefix = f"playlists/{playlist_name}/" if is_admin else f"playlists/{user_id}/{playlist_name}/"
+              
+              # List songs in the playlist
+              response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+              songs = []
+              
+              for obj in response.get('Contents', []):
+                  song_key = obj['Key']
+                  if song_key.endswith(('.wav', '.mp3', '.aac')):
+                      songs.append({
+                          'name': song_key.split('/')[-1],
+                          'url': f"https://{bucket_name}.s3.amazonaws.com/{song_key}"
+                      })
+              
+              return {"songs": songs}
+
+          def handler(event, context):
+              try:
+                  claims = event['requestContext']['authorizer']['claims']
+                  user_id = claims['sub']
+                  groups = claims.get('cognito:groups', [])
+                  is_admin = 'admin' in groups
+
+                  operation = event['httpMethod']
+                  query_params = event.get('queryStringParameters', {}) or {}
+                  
+                  if operation == 'GET':
+                      if 'playlist' in query_params:
+                          return {
+                              'statusCode': 200,
+                              'body': json.dumps(get_playlist_songs(user_id, query_params['playlist'], is_admin))
+                          }
+                      else:
+                          return {
+                              'statusCode': 200,
+                              'body': json.dumps(list_playlists(user_id, is_admin))
+                          }
+                  else:
+                      return {
+                          'statusCode': 405,
+                          'body': json.dumps('Method not allowed')
+                      }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
+                  }
+      Runtime: python3.8
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref SongsBucket  # Changed to use same bucket as songs
+
   # IAM role for the Lambda function
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -143,6 +233,30 @@ Resources:
                 Action:
                   - s3:PutObject  # Allow Lambda to put objects in S3
                 Resource: !Sub arn:aws:s3:::${SongsBucket}/*  # S3 bucket ARN
+
+  # IAM role for playlist management Lambda
+  PlaylistLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PlaylistS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource: 
+                  - !Sub arn:aws:s3:::${SongsBucket}
+                  - !Sub arn:aws:s3:::${SongsBucket}/*
 
   # API Gateway to expose the Lambda function
   ApiGateway:
@@ -174,6 +288,31 @@ Resources:
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt UploadSongsLambda.Arn  # Lambda function ARN
 
+  # API Gateway resources for playlist management
+  PlaylistResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: playlists
+      RestApiId: !Ref ApiGateway
+
+  PlaylistGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      HttpMethod: GET
+      ResourceId: !Ref PlaylistResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt PlaylistManagementLambda.Arn
+      RequestParameters:
+        method.request.querystring.playlist: false
+
   # Cognito authorizer for the API Gateway
   ApiGatewayAuthorizer:
     Type: AWS::ApiGateway::Authorizer
@@ -192,6 +331,13 @@ Resources:
       Action: lambda:InvokeFunction  # Allow invocation of the Lambda function
       FunctionName: !GetAtt UploadSongsLambda.Arn  # Lambda function ARN
       Principal: apigateway.amazonaws.com  # Principal for API Gateway
+
+  PlaylistLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PlaylistManagementLambda.Arn
+      Principal: apigateway.amazonaws.com
 
   # WAF WebACL to protect the API Gateway
   WAFWebACL:
@@ -360,3 +506,7 @@ Outputs:
   ApiGatewayUrl:
     Description: URL for the API Gateway
     Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload
+
+  PlaylistApiUrl:
+    Description: URL for the Playlist API Gateway
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/playlists
