@@ -106,7 +106,7 @@ Resources:
                           'body': json.dumps('Only .wav, .mp3, and .aac files are allowed')
                       }
 
-                  bucket_name = "${SongsBucket}"
+                  bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
                   
                   s3.put_object(
                       Bucket=bucket_name,
@@ -127,7 +127,7 @@ Resources:
       Runtime: python3.8  # Runtime environment
       Environment:
         Variables:
-          BUCKET_NAME: !Ref SongsBucket  # Environment variable for the bucket name
+          ENVIRONMENT: !Ref Environment
 
   # Lambda for playlist management
   PlaylistManagementLambda:
@@ -143,7 +143,7 @@ Resources:
           import os
 
           s3 = boto3.client('s3')
-          bucket_name = os.environ['BUCKET_NAME']  # Changed to use same bucket as songs
+          bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
 
           def list_playlists(user_id, is_admin):
               # For admins, list all playlists (top-level folders)
@@ -211,7 +211,7 @@ Resources:
       Runtime: python3.8
       Environment:
         Variables:
-          BUCKET_NAME: !Ref SongsBucket  # Changed to use same bucket as songs
+          ENVIRONMENT: !Ref Environment
 
   # IAM role for the Lambda function
   LambdaExecutionRole:
