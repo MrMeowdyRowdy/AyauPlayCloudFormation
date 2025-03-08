@@ -73,10 +73,11 @@ Resources:
 
           s3 = boto3.client('s3')
 
-          ALLOWED_EXTENSIONS = {'.wav', '.mp3'}
+          ALLOWED_EXTENSIONS = {'.wav', '.mp3', '.aac'}
           CONTENT_TYPES = {
               '.wav': 'audio/wav',
-              '.mp3': 'audio/mpeg'
+              '.mp3': 'audio/mpeg',
+              '.aac': 'audio/aac'
           }
 
           def is_valid_audio(filename):
@@ -96,7 +97,7 @@ Resources:
                   if not is_valid_audio(file_name):
                       return {
                           'statusCode': 400,
-                          'body': json.dumps('Only .wav and .mp3 files are allowed')
+                          'body': json.dumps('Only .wav, .mp3, and .aac files are allowed')
                       }
 
                   bucket_name = "${SongsBucket}"
@@ -257,6 +258,15 @@ Resources:
                     PositionalConstraint: EXACTLY
                 - ByteMatchStatement:
                     SearchString: audio/mpeg
+                    FieldToMatch:
+                      SingleHeader:
+                        Name: content-type
+                    TextTransformations:
+                      - Priority: 1
+                        Type: LOWERCASE
+                    PositionalConstraint: EXACTLY
+                - ByteMatchStatement:
+                    SearchString: audio/aac
                     FieldToMatch:
                       SingleHeader:
                         Name: content-type
