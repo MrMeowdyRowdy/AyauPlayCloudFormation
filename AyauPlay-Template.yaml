@@ -11,6 +11,7 @@ Parameters:
   CloudFrontKeyPairId:
     Type: String
     Description: The ID of the CloudFront key pair used for signed URLs
+    Default: K2P8QBF4IA7GIQ
 
 Resources:
   # Cognito User Pool for user authentication
