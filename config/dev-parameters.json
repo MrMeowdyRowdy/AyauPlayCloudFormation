@@ -1,0 +1,6 @@
+{
+  "Parameters": {
+    "Environment": "dev",
+    "CloudFrontKeyPairId": "K2P8QBF4IA7GIQ"  // Replace with your actual key pair ID
+  }
+}
