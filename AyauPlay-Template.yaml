@@ -140,8 +140,10 @@ Resources:
           import os
           import mimetypes
 
+          # Initialize S3 client
           s3 = boto3.client('s3')
 
+          # Define allowed audio file extensions and their MIME types
           ALLOWED_EXTENSIONS = {'.wav', '.mp3', '.aac'}
           CONTENT_TYPES = {
               '.wav': 'audio/wav',
@@ -150,27 +152,53 @@ Resources:
           }
 
           def is_valid_audio(filename):
+              """
+              Check if the file has an allowed audio extension
+              Args:
+                  filename (str): Name of the file to check
+              Returns:
+                  bool: True if extension is allowed, False otherwise
+              """
               ext = os.path.splitext(filename)[1].lower()
               return ext in ALLOWED_EXTENSIONS
 
           def get_content_type(filename):
+              """
+              Get the MIME type for a file based on its extension
+              Args:
+                  filename (str): Name of the file
+              Returns:
+                  str: MIME type of the file or default octet-stream
+              """
               ext = os.path.splitext(filename)[1].lower()
               return CONTENT_TYPES.get(ext, 'application/octet-stream')
 
           def handler(event, context):
+              """
+              Main Lambda handler for file uploads
+              Args:
+                  event (dict): API Gateway event
+                  context (object): Lambda context
+              Returns:
+                  dict: API Gateway response
+              """
               try:
+                  # Parse the request body and decode the file
                   body = json.loads(event['body'])
                   file_content = base64.b64decode(body['file'])
                   file_name = body['fileName']
                   
+                  # Validate file type
                   if not is_valid_audio(file_name):
                       return {
                           'statusCode': 400,
                           'body': json.dumps('Only .wav, .mp3, and .aac files are allowed')
                       }
 
+                  # Get the environment-specific bucket name
                   bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
                   
+                  # Upload file to S3 with proper content type
                   s3.put_object(
                       Bucket=bucket_name,
                       Key=file_name,
@@ -205,12 +233,19 @@ Resources:
           import boto3
           import os
 
+          # Initialize AWS clients
           s3 = boto3.client('s3')
-          bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
-
           lambda_client = boto3.client('lambda')
+          bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
           
           def get_signed_url(object_key):
+              """
+              Get a signed URL for a song file using SignedUrlLambda
+              Args:
+                  object_key (str): S3 object key of the song
+              Returns:
+                  str: Signed URL for CloudFront access
+              """
               response = lambda_client.invoke(
                   FunctionName=os.environ['SIGNED_URL_LAMBDA'],
                   InvocationType='RequestResponse',
@@ -219,8 +254,15 @@ Resources:
               return json.loads(response['Payload'].read())
 
           def list_playlists(user_id, is_admin):
-              # For admins, list all playlists (top-level folders)
-              # For regular users, list only allowed playlists
+              """
+              List available playlists based on user permissions
+              Args:
+                  user_id (str): Cognito user ID
+                  is_admin (bool): Whether user has admin privileges
+              Returns:
+                  dict: List of available playlists
+              """
+              # For admins, list all playlists, for users, list only their playlists
               prefix = "playlists/" if is_admin else f"playlists/{user_id}/"
               response = s3.list_objects_v2(Bucket=bucket_name, Delimiter='/', Prefix=prefix)
               playlists = []
@@ -233,10 +275,19 @@ Resources:
               return {"playlists": playlists}
 
           def get_playlist_songs(user_id, playlist_name, is_admin):
-              # Verify access rights
+              """
+              Get all songs in a playlist with signed URLs
+              Args:
+                  user_id (str): Cognito user ID
+                  playlist_name (str): Name of the playlist
+                  is_admin (bool): Whether user has admin privileges
+              Returns:
+                  dict: List of songs with signed URLs
+              """
+              # Determine the prefix based on user permissions
               prefix = f"playlists/{playlist_name}/" if is_admin else f"playlists/{user_id}/{playlist_name}/"
               
-              # List songs in the playlist
+              # List all songs in the playlist
               response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
               songs = []
               
@@ -252,7 +303,16 @@ Resources:
               return {"songs": songs}
 
           def handler(event, context):
+              """
+              Main Lambda handler for playlist operations
+              Args:
+                  event (dict): API Gateway event
+                  context (object): Lambda context
+              Returns:
+                  dict: API Gateway response
+              """
               try:
+                  # Extract user information from Cognito claims
                   claims = event['requestContext']['authorizer']['claims']
                   user_id = claims['sub']
                   groups = claims.get('cognito:groups', [])
@@ -261,6 +321,7 @@ Resources:
                   operation = event['httpMethod']
                   query_params = event.get('queryStringParameters', {}) or {}
                   
+                  # Handle GET requests for playlist operations
                   if operation == 'GET':
                       if 'playlist' in query_params:
                           return {
@@ -307,11 +368,20 @@ Resources:
           import rsa
 
           def handler(event, context):
+              """
+              Generate signed URLs for CloudFront content
+              Args:
+                  event (dict): Lambda event containing object key
+                  context (object): Lambda context
+              Returns:
+                  str: Signed URL for CloudFront access
+              """
+              # Get the S3 object key and construct CloudFront URL
               object_key = event['object_key']
               distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
               url = f"https://{distribution_domain}/{object_key}"
               
-              # Get private key from SSM Parameter Store
+              # Retrieve private key from SSM Parameter Store
               ssm = boto3.client('ssm')
               key_param = ssm.get_parameter(Name=os.environ['PRIVATE_KEY_PARAM'], WithDecryption=True)
               private_key = serialization.load_pem_private_key(
@@ -320,10 +390,11 @@ Resources:
                   backend=default_backend()
               )
               
-              # Create CloudFront signer
+              # Configure CloudFront signer with key pair ID
               key_id = os.environ['KEY_PAIR_ID']
               expire_date = datetime.utcnow() + timedelta(minutes=5)
               
+              # Generate and return signed URL
               signer = CloudFrontSigner(key_id, private_key.sign_msg)
               signed_url = signer.generate_presigned_url(
                   url,
@@ -434,41 +505,62 @@ Resources:
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt UploadSongsLambda.Arn  # Lambda function ARN
 
-  # API Gateway resources for playlist management
+  # Defines the /playlists resource endpoint in API Gateway
+  # This resource handles all playlist-related operations
   PlaylistResource:
     Type: AWS::ApiGateway::Resource
     Properties:
+      # Set this resource as a child of the API's root path
       ParentId: !GetAtt ApiGateway.RootResourceId
+      # Creates the /playlists path segment
       PathPart: playlists
       RestApiId: !Ref ApiGateway
 
+  # Configures the GET method for the /playlists endpoint
+  # This endpoint supports:
+  # - Listing all playlists: GET /playlists
+  # - Getting songs in a playlist: GET /playlists?playlist=<playlist_name>
   PlaylistGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
+      # Requires authentication via Cognito User Pools
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref ApiGatewayAuthorizer
       HttpMethod: GET
       ResourceId: !Ref PlaylistResource
       RestApiId: !Ref ApiGateway
       Integration:
+        # POST is used for Lambda proxy integration despite being a GET endpoint
         IntegrationHttpMethod: POST
+        # AWS_PROXY enables automatic request/response mapping with Lambda
         Type: AWS_PROXY
+        # The Lambda function ARN that will handle playlist operations
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt PlaylistManagementLambda.Arn
+      # Configures the optional 'playlist' query parameter
+      # When present, it retrieves songs from a specific playlist
+      # When absent, it lists all available playlists
       RequestParameters:
         method.request.querystring.playlist: false
 
-  # Cognito authorizer for the API Gateway
+  # Cognito User Pools Authorizer configuration
+  # This authorizer validates JWT tokens issued by Cognito
+  # and ensures only authenticated users can access the API
   ApiGatewayAuthorizer:
     Type: AWS::ApiGateway::Authorizer
     Properties:
-      Name: CognitoAuthorizer  # Name of the authorizer
-      IdentitySource: method.request.header.Authorization  # Identity source for authorization
-      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
-      Type: COGNITO_USER_POOLS  # Use Cognito user pools
+      # Friendly name for the authorizer
+      Name: CognitoAuthorizer
+      # Specifies where to look for the JWT token in incoming requests
+      # The token should be provided in the Authorization header
+      IdentitySource: method.request.header.Authorization
+      RestApiId: !Ref ApiGateway
+      # Configures this as a Cognito User Pools authorizer
+      Type: COGNITO_USER_POOLS
+      # Links this authorizer to the Cognito User Pool
       ProviderARNs:
-        - !GetAtt UserPool.Arn  # ARN of the user pool
+        - !GetAtt UserPool.Arn
 
   # Permission for API Gateway to invoke the Lambda function
   LambdaPermission:
