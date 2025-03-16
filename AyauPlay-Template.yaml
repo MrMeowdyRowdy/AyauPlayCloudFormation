@@ -12,6 +12,19 @@ Parameters:
     Type: String
     Description: The ID of the CloudFront key pair used for signed URLs
     Default: K2P8QBF4IA7GIQ
+  RedshiftMasterUsername:
+    Type: String
+    Description: Master username for Redshift cluster
+    Default: admin
+    MinLength: 1
+    MaxLength: 128
+    AllowedPattern: '([a-z])([a-z]|[0-9])*'
+  RedshiftMasterPassword:
+    Type: String
+    Description: Master password for Redshift cluster
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 64
 
 Resources:
   # Cognito User Pool for user authentication
@@ -429,6 +442,11 @@ Resources:
                 Action:
                   - s3:PutObject  # Allow Lambda to put objects in S3
                 Resource: !Sub arn:aws:s3:::${SongsBucket}/*  # S3 bucket ARN
+              - Effect: Allow
+                Action:
+                  - redshift-data:ExecuteStatement
+                  - redshift-data:DescribeStatement
+                Resource: !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
 
   # IAM role for playlist management Lambda
   PlaylistLambdaRole:
@@ -442,7 +460,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: PlaylistS3Policy
+        - PolicyName: PlaylistS3AndRedshiftPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -453,6 +471,11 @@ Resources:
                 Resource: 
                   - !Sub arn:aws:s3:::${SongsBucket}
                   - !Sub arn:aws:s3:::${SongsBucket}/*
+              - Effect: Allow
+                Action:
+                  - redshift-data:ExecuteStatement
+                  - redshift-data:DescribeStatement
+                Resource: !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
 
   # IAM role for SignedUrlLambda
   SignedUrlLambdaRole:
@@ -474,6 +497,47 @@ Resources:
                 Action:
                   - ssm:GetParameter
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloudfront/${Environment}/*
+
+  # Redshift cluster for data storage
+  RedshiftCluster:
+    Type: AWS::Redshift::Cluster
+    Properties:
+      ClusterIdentifier: !Sub ayauplay-cluster-${Environment}
+      DBName: ayauplaydb
+      MasterUsername: !Ref RedshiftMasterUsername
+      MasterUserPassword: !Ref RedshiftMasterPassword
+      NodeType: dc2.large
+      NumberOfNodes: 2
+      PubliclyAccessible: false
+      VpcSecurityGroupIds: 
+        - !Ref RedshiftSecurityGroup
+      IamRoles:
+        - !GetAtt RedshiftRole.Arn
+
+  # Security group for Redshift cluster
+  RedshiftSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Redshift cluster
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5439
+          ToPort: 5439
+          CidrIp: 0.0.0.0/0
+
+  # IAM role for Redshift
+  RedshiftRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: redshift.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
 
   # API Gateway to expose the Lambda function
   ApiGateway:
@@ -752,3 +816,7 @@ Outputs:
   CloudFrontDomain:
     Description: CloudFront Distribution Domain Name
     Value: !GetAtt SongsDistribution.DomainName
+
+  RedshiftClusterEndpoint:
+    Description: Endpoint for Redshift cluster
+    Value: !Sub ${RedshiftCluster.Endpoint.Address}:${RedshiftCluster.Endpoint.Port}
