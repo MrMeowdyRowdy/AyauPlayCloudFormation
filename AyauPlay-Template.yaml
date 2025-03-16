@@ -28,6 +28,12 @@ Parameters:
     Default: 'Ay47P1a74py2024!-*#'
     AllowedPattern: ^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@#$%^&+=!]).*$
     ConstraintDescription: Must be at least 8 characters containing at least one uppercase letter, one lowercase letter, one number, and one special character (@#$%^&+=!)
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where Redshift cluster will be deployed
+  RedshiftSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs for Redshift cluster
 
 Resources:
   # Cognito User Pool for user authentication
@@ -511,8 +517,9 @@ Resources:
       MasterUserPassword: !Ref RedshiftMasterPassword
       NodeType: dc2.large
       NumberOfNodes: 2
-      ClusterType: multi-node  # Add ClusterType property
+      ClusterType: multi-node
       PubliclyAccessible: false
+      ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
       VpcSecurityGroupIds: 
         - !Ref RedshiftSecurityGroup
       IamRoles:
@@ -523,11 +530,19 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Redshift cluster
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5439
           ToPort: 5439
           CidrIp: 0.0.0.0/0
+
+  # Redshift cluster subnet group
+  RedshiftSubnetGroup:
+    Type: AWS::Redshift::ClusterSubnetGroup
+    Properties:
+      Description: Subnet group for Redshift cluster
+      SubnetIds: !Ref RedshiftSubnets
 
   # IAM role for Redshift
   RedshiftRole:
