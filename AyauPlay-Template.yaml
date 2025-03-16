@@ -511,6 +511,7 @@ Resources:
       MasterUserPassword: !Ref RedshiftMasterPassword
       NodeType: dc2.large
       NumberOfNodes: 2
+      ClusterType: multi-node  # Add ClusterType property
       PubliclyAccessible: false
       VpcSecurityGroupIds: 
         - !Ref RedshiftSecurityGroup
