@@ -21,13 +21,13 @@ Parameters:
     AllowedPattern: '([a-z])([a-z]|[0-9])*'
   RedshiftMasterPassword:
     Type: String
-    Description: Master password for Redshift cluster
+    Description: Master password for Redshift cluster (must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters)
     NoEcho: true
     MinLength: 8
     MaxLength: 64
-    Default: 'ALyS6$5nU!3/*9df7QrE1d'  # Adding secure default password
-    AllowedPattern: ^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$
-    ConstraintDescription: Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters
+    Default: 'Ay47P1ay2024!@#'
+    AllowedPattern: ^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@#$%^&+=!]).*$
+    ConstraintDescription: Must be at least 8 characters containing at least one uppercase letter, one lowercase letter, one number, and one special character (@#$%^&+=!)
 
 Resources:
   # Cognito User Pool for user authentication
