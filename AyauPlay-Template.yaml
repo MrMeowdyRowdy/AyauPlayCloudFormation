@@ -266,6 +266,7 @@ Resources:
           # Initialize AWS clients
           s3 = boto3.client('s3')
           lambda_client = boto3.client('lambda')
+          redshift_data = boto3.client('redshift-data')
           bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
           
           def get_signed_url(object_key):
@@ -283,17 +284,32 @@ Resources:
               )
               return json.loads(response['Payload'].read())
 
-          def list_playlists(user_id, is_admin):
+          def list_playlists(user_id, groups):
               """
               List available playlists based on user permissions
               Args:
                   user_id (str): Cognito user ID
-                  is_admin (bool): Whether user has admin privileges
+                  groups (list): List of Cognito groups the user belongs to
               Returns:
                   dict: List of available playlists
               """
-              # For admins, list all playlists, for users, list only their playlists
-              prefix = "playlists/" if is_admin else f"playlists/{user_id}/"
+              is_admin = 'admin' in groups
+              if is_admin:
+                  prefix = "playlists/"
+              else:
+                  # Query Redshift for playlists the user has access to
+                  sql = f"""
+                  SELECT playlist_id FROM playlist_permissions WHERE user_id = '{user_id}'
+                  """
+                  response = redshift_data.execute_statement(
+                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                      Database=os.environ['REDSHIFT_DATABASE'],
+                      DbUser=os.environ['REDSHIFT_DB_USER'],
+                      Sql=sql
+                  )
+                  playlist_ids = [row['playlist_id'] for row in response['Records']]
+                  prefix = f"playlists/{user_id}/" if not playlist_ids else f"playlists/({','.join(playlist_ids)})/"
+
               response = s3.list_objects_v2(Bucket=bucket_name, Delimiter='/', Prefix=prefix)
               playlists = []
               
@@ -304,16 +320,17 @@ Resources:
               
               return {"playlists": playlists}
 
-          def get_playlist_songs(user_id, playlist_name, is_admin):
+          def get_playlist_songs(user_id, playlist_name, groups):
               """
               Get all songs in a playlist with signed URLs
               Args:
                   user_id (str): Cognito user ID
                   playlist_name (str): Name of the playlist
-                  is_admin (bool): Whether user has admin privileges
+                  groups (list): List of Cognito groups the user belongs to
               Returns:
                   dict: List of songs with signed URLs
               """
+              is_admin = 'admin' in groups
               # Determine the prefix based on user permissions
               prefix = f"playlists/{playlist_name}/" if is_admin else f"playlists/{user_id}/{playlist_name}/"
               
@@ -346,7 +363,6 @@ Resources:
                   claims = event['requestContext']['authorizer']['claims']
                   user_id = claims['sub']
                   groups = claims.get('cognito:groups', [])
-                  is_admin = 'admin' in groups
 
                   operation = event['httpMethod']
                   query_params = event.get('queryStringParameters', {}) or {}
@@ -356,12 +372,12 @@ Resources:
                       if 'playlist' in query_params:
                           return {
                               'statusCode': 200,
-                              'body': json.dumps(get_playlist_songs(user_id, query_params['playlist'], is_admin))
+                              'body': json.dumps(get_playlist_songs(user_id, query_params['playlist'], groups))
                           }
                       else:
                           return {
                               'statusCode': 200,
-                              'body': json.dumps(list_playlists(user_id, is_admin))
+                              'body': json.dumps(list_playlists(user_id, groups))
                           }
                   else:
                       return {
@@ -378,6 +394,9 @@ Resources:
         Variables:
           ENVIRONMENT: !Ref Environment
           SIGNED_URL_LAMBDA: !Ref SignedUrlLambda
+          REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
+          REDSHIFT_DATABASE: ayauplaydb
+          REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
 
   # Lambda for generating signed URLs
   SignedUrlLambda:
@@ -677,6 +696,14 @@ Resources:
                               username VARCHAR(255),
                               stream_duration INTEGER,
                               streamed_at TIMESTAMP DEFAULT GETDATE()
+                          );
+                          """,
+                          """
+                          CREATE TABLE IF NOT EXISTS playlist_permissions (
+                              permission_id VARCHAR(255) PRIMARY KEY,
+                              user_id VARCHAR(255) REFERENCES users(user_id),
+                              playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
+                              granted_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """
                       ]
