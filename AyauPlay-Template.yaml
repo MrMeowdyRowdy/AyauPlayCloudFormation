@@ -31,9 +31,17 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: VPC ID where Redshift cluster will be deployed
+    Default: vpc-0b4228448dcd82f4d
   RedshiftSubnets:
     Type: List<AWS::EC2::Subnet::Id>
     Description: List of subnet IDs for Redshift cluster
+    Default: >-
+      subnet-0098ced055bf20380,subnet-06cbeea76c0113820,subnet-0243375a1f089435e,subnet-055f6bbceddc8c7ec,subnet-04ddb80a25000f797,subnet-0c24f5e04569b6916
+  VpcCidr:
+    Type: String
+    Description: CIDR block for VPC (e.g., 10.0.0.0/16)
+    Default: 172.31.0.0/16
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
 
 Resources:
   # Cognito User Pool for user authentication
@@ -509,6 +517,7 @@ Resources:
 
   # Redshift cluster for data storage
   RedshiftCluster:
+    DependsOn: RedshiftSecurityGroup
     Type: AWS::Redshift::Cluster
     Properties:
       ClusterIdentifier: !Sub ayauplay-cluster-${Environment}
@@ -521,7 +530,7 @@ Resources:
       PubliclyAccessible: false
       ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
       VpcSecurityGroupIds: 
-        - !Ref RedshiftSecurityGroup
+        - !GetAtt RedshiftSecurityGroup.GroupId
       IamRoles:
         - !GetAtt RedshiftRole.Arn
 
@@ -535,6 +544,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 5439
           ToPort: 5439
+          CidrIp: !Ref VpcCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
           CidrIp: 0.0.0.0/0
 
   # Redshift cluster subnet group
