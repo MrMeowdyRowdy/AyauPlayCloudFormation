@@ -528,17 +528,17 @@ Resources:
                   groups = claims.get('cognito:groups', [])
                   is_admin = 'admin' in groups
 
-                  # Extract playlist name from query parameters
-                  query_params = event.get('queryStringParameters', {}) or {}
-                  playlist_name = query_params.get('playlist')
-                  if not playlist_name:
+                  # Extract playlist ID from request body
+                  body = json.loads(event['body'])
+                  playlist_id = body.get('playlist_id')
+                  if not playlist_id:
                       return {
                           'statusCode': 400,
-                          'body': json.dumps('Playlist name is required')
+                          'body': json.dumps('Playlist ID is required')
                       }
 
                   # Determine the prefix based on user permissions
-                  prefix = f"playlists/{playlist_name}/" if is_admin else f"playlists/{user_id}/{playlist_name}/"
+                  prefix = f"playlists/{playlist_id}/" if is_admin else f"playlists/{user_id}/{playlist_id}/"
                   
                   # List all songs in the playlist
                   response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
@@ -1108,7 +1108,7 @@ Resources:
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref ApiGatewayAuthorizer
-      HttpMethod: GET
+      HttpMethod: POST
       ResourceId: !Ref RetrieveSongsResource
       RestApiId: !Ref ApiGateway
       Integration:
@@ -1330,6 +1330,10 @@ Outputs:
   PlaylistApiUrl:
     Description: URL for the Playlist API Gateway
     Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/playlists
+
+  RetrieveSongsApiUrl:
+    Description: URL for the Retrieve Songs API Gateway
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/retrieve-songs
 
   CloudFrontDomain:
     Description: CloudFront Distribution Domain Name
