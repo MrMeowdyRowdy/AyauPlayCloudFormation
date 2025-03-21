@@ -715,16 +715,15 @@ Resources:
                 Action:
                   - redshift-data:ExecuteStatement
                   - redshift-data:DescribeStatement
-                  - redshift:GetClusterCredentials
-                  - redshift:DescribeClusters
-                Resource:
-                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
-                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbuser:${RedshiftCluster}/*
-                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbname:${RedshiftCluster}/*
+                Resource: '*'  # Redshift Data API requires '*' for these actions
               - Effect: Allow
                 Action:
                   - redshift:GetClusterCredentials
-                Resource: '*'
+                  - redshift:DescribeClusters
+                Resource: 
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbuser:${RedshiftCluster}/*
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbname:${RedshiftCluster}/*
 
   # Custom resource to trigger database initialization
   RedshiftInitTrigger:
