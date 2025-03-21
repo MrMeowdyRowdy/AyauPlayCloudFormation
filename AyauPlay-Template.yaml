@@ -584,75 +584,111 @@ Resources:
           import json
           import boto3
           import cfnresponse
+          import time
+          import logging
+
+          # Set up logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
           
           redshift_data = boto3.client('redshift-data')
           
           def execute_sql(sql, database, cluster_id, db_user):
-              response = redshift_data.execute_statement(
-                  Database=database,
-                  ClusterIdentifier=cluster_id,
-                  DbUser=db_user,
-                  Sql=sql
-              )
-              return response['Id']
+              logger.info(f"Executing SQL on cluster: {cluster_id}, database: {database}")
+              try:
+                  # Execute the SQL statement
+                  response = redshift_data.execute_statement(
+                      Database=database,
+                      ClusterIdentifier=cluster_id,
+                      DbUser=db_user,
+                      Sql=sql
+                  )
+                  statement_id = response['Id']
+                  
+                  # Wait for the statement to complete
+                  while True:
+                      status = redshift_data.describe_statement(Id=statement_id)
+                      if status['Status'] in ['FINISHED', 'FAILED', 'ABORTED']:
+                          if status['Status'] != 'FINISHED':
+                              error_message = status.get('Error', 'Unknown error')
+                              raise Exception(f"SQL execution failed: {error_message}")
+                          break
+                      time.sleep(2)
+                  
+                  return statement_id
+              except Exception as e:
+                  logger.error(f"Error executing SQL: {str(e)}")
+                  raise
           
           def handler(event, context):
+              logger.info(f"Event received: {json.dumps(event)}")
+              response_data = {}
+              
               try:
                   if event['RequestType'] in ['Create', 'Update']:
                       cluster_id = event['ResourceProperties']['ClusterId']
                       database = event['ResourceProperties']['Database']
                       db_user = event['ResourceProperties']['DbUser']
                       
-                      # Define table creation SQL statements
-                      sql_statements = """
-
-                      -- Playlists table
-                      CREATE TABLE IF NOT EXISTS playlists (
-                          playlist_id VARCHAR(255) PRIMARY KEY,
-                          name VARCHAR(255) NOT NULL,
-                          description VARCHAR(255) NOT NULL,
-                          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                      );
-
-                      -- Songs table
-                      CREATE TABLE IF NOT EXISTS songs (
-                          song_id VARCHAR(255) PRIMARY KEY,
-                          title VARCHAR(255) NOT NULL,
-                          artist VARCHAR(255),
-                          duration TIME NOT NULL,
-                          s3_key VARCHAR(512) NOT NULL,
-                          art_location VARCHAR(512),
-                          uploaded_by VARCHAR(255) REFERENCES users(user_id),
-                          uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                      );
-
-                      -- Playlist_Songs junction table
-                      CREATE TABLE IF NOT EXISTS playlist_songs (
-                          playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
-                          song_id VARCHAR(255) REFERENCES songs(song_id),
-                          added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                          PRIMARY KEY (playlist_id, song_id)
-                      );
-                      """
+                      # Define table creation SQL statements - execute one at a time
+                      sql_statements = [
+                          """
+                          CREATE TABLE IF NOT EXISTS users (
+                              user_id VARCHAR(255) PRIMARY KEY,
+                              username VARCHAR(255) NOT NULL,
+                              email VARCHAR(255) NOT NULL UNIQUE,
+                              created_at TIMESTAMP DEFAULT GETDATE()
+                          );
+                          """,
+                          """
+                          CREATE TABLE IF NOT EXISTS playlists (
+                              playlist_id VARCHAR(255) PRIMARY KEY,
+                              name VARCHAR(255) NOT NULL,
+                              description VARCHAR(255),
+                              user_id VARCHAR(255) REFERENCES users(user_id),
+                              created_at TIMESTAMP DEFAULT GETDATE(),
+                              updated_at TIMESTAMP DEFAULT GETDATE()
+                          );
+                          """,
+                          """
+                          CREATE TABLE IF NOT EXISTS songs (
+                              song_id VARCHAR(255) PRIMARY KEY,
+                              title VARCHAR(255) NOT NULL,
+                              artist VARCHAR(255),
+                              duration INTEGER,
+                              s3_key VARCHAR(512) NOT NULL,
+                              art_location VARCHAR(512),
+                              uploaded_by VARCHAR(255) REFERENCES users(user_id),
+                              uploaded_at TIMESTAMP DEFAULT GETDATE()
+                          );
+                          """,
+                          """
+                          CREATE TABLE IF NOT EXISTS playlist_songs (
+                              playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
+                              song_id VARCHAR(255) REFERENCES songs(song_id),
+                              added_at TIMESTAMP DEFAULT GETDATE(),
+                              PRIMARY KEY (playlist_id, song_id)
+                          );
+                          """
+                      ]
                       
-                      # Execute SQL statements
-                      statement_id = execute_sql(sql_statements, database, cluster_id, db_user)
+                      # Execute each statement separately
+                      for sql in sql_statements:
+                          statement_id = execute_sql(sql.strip(), database, cluster_id, db_user)
+                          logger.info(f"Successfully executed statement: {statement_id}")
                       
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
-                          'Message': 'Database initialized successfully',
-                          'StatementId': statement_id
-                      })
+                      response_data['Message'] = 'Database initialized successfully'
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
                   else:
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
-                          'Message': 'No action required for DELETE'
-                      })
+                      response_data['Message'] = 'No action required for DELETE'
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                      
               except Exception as e:
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {
-                      'Error': str(e)
-                  })
+                  logger.error(f"Error: {str(e)}")
+                  response_data['Error'] = str(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
       Runtime: python3.8
-      Timeout: 300  # 5 minutes
+      Timeout: 300
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
