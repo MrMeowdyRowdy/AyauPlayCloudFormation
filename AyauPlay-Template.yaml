@@ -669,6 +669,15 @@ Resources:
                               added_at TIMESTAMP DEFAULT GETDATE(),
                               PRIMARY KEY (playlist_id, song_id)
                           );
+                          """,
+                          """
+                          CREATE TABLE IF NOT EXISTS stream_analytics (
+                              stream_id VARCHAR(255) PRIMARY KEY,
+                              song_id VARCHAR(255) REFERENCES songs(song_id),
+                              username VARCHAR(255),
+                              stream_duration INTEGER,
+                              streamed_at TIMESTAMP DEFAULT GETDATE()
+                          );
                           """
                       ]
                       
@@ -734,6 +743,120 @@ Resources:
       ClusterId: !Sub ayauplay-cluster-${Environment}
       Database: ayauplaydb
       DbUser: !Ref RedshiftMasterUsername
+
+  # Lambda function to record streaming data
+  RecordStreamLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub RecordStreamLambda-${Environment}
+      Handler: index.handler
+      Role: !GetAtt RecordStreamLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import uuid
+          import os
+
+          redshift_data = boto3.client('redshift-data')
+
+          def handler(event, context):
+              try:
+                  body = json.loads(event['body'])
+                  song_id = body['song_id']
+                  username = body['username']
+                  stream_duration = body['stream_duration']
+
+                  sql = f"""
+                  INSERT INTO stream_analytics (stream_id, song_id, username, stream_duration, streamed_at)
+                  VALUES ('{uuid.uuid4()}', '{song_id}', '{username}', {stream_duration}, GETDATE());
+                  """
+
+                  response = redshift_data.execute_statement(
+                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                      Database=os.environ['REDSHIFT_DATABASE'],
+                      DbUser=os.environ['REDSHIFT_DB_USER'],
+                      Sql=sql
+                  )
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps('Stream data recorded successfully')
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
+                  }
+      Runtime: python3.8
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
+          REDSHIFT_DATABASE: ayauplaydb
+          REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
+
+  # IAM role for RecordStreamLambda
+  RecordStreamLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: RedshiftDataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - redshift-data:ExecuteStatement
+                  - redshift-data:DescribeStatement
+                Resource: '*'  # Redshift Data API requires '*' for these actions
+              - Effect: Allow
+                Action:
+                  - redshift:GetClusterCredentials
+                  - redshift:DescribeClusters
+                Resource: 
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbuser:${RedshiftCluster}/*
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbname:${RedshiftCluster}/*
+
+  # API Gateway resource for the record stream endpoint
+  RecordStreamResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: record-stream
+      RestApiId: !Ref ApiGateway
+
+  # API Gateway method for the record stream endpoint
+  RecordStreamMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      HttpMethod: POST
+      ResourceId: !Ref RecordStreamResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt RecordStreamLambda.Arn
+
+  # Permission for API Gateway to invoke the RecordStreamLambda function
+  RecordStreamLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt RecordStreamLambda.Arn
+      Principal: apigateway.amazonaws.com
 
   # API Gateway to expose the Lambda function
   ApiGateway:
