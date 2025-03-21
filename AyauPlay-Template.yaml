@@ -458,6 +458,118 @@ Resources:
           PRIVATE_KEY_PARAM: !Sub /cloudfront/${Environment}/private-key
           KEY_PAIR_ID: !Ref CloudFrontKeyPairId
 
+  # Lambda function to retrieve all songs in a given playlist
+  RetrieveSongsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub RetrieveSongsLambda-${Environment}
+      Handler: index.handler
+      Role: !GetAtt RetrieveSongsLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from botocore.signers import CloudFrontSigner
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.backends import default_backend
+          from datetime import datetime, timedelta
+
+          s3 = boto3.client('s3')
+          lambda_client = boto3.client('lambda')
+          bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
+
+          def get_signed_url(object_key):
+              """
+              Generate a signed URL for CloudFront access
+              Args:
+                  object_key (str): S3 object key of the song
+              Returns:
+                  str: Signed URL for CloudFront access
+              """
+              distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
+              url = f"https://{distribution_domain}/{object_key}"
+              
+              # Retrieve private key from SSM Parameter Store
+              ssm = boto3.client('ssm')
+              key_param = ssm.get_parameter(Name=os.environ['PRIVATE_KEY_PARAM'], WithDecryption=True)
+              private_key = serialization.load_pem_private_key(
+                  key_param['Parameter']['Value'].encode('utf-8'),
+                  password=None,
+                  backend=default_backend()
+              )
+              
+              # Configure CloudFront signer with key pair ID
+              key_id = os.environ['KEY_PAIR_ID']
+              expire_date = datetime.utcnow() + timedelta(minutes=5)
+              
+              # Generate and return signed URL
+              signer = CloudFrontSigner(key_id, private_key.sign_msg)
+              signed_url = signer.generate_presigned_url(
+                  url,
+                  date_less_than=expire_date
+              )
+              
+              return signed_url
+
+          def handler(event, context):
+              """
+              Main Lambda handler to retrieve all songs in a given playlist
+              Args:
+                  event (dict): API Gateway event
+                  context (object): Lambda context
+              Returns:
+                  dict: API Gateway response
+              """
+              try:
+                  # Extract user information from Cognito claims
+                  claims = event['requestContext']['authorizer']['claims']
+                  user_id = claims['sub']
+                  groups = claims.get('cognito:groups', [])
+                  is_admin = 'admin' in groups
+
+                  # Extract playlist name from query parameters
+                  query_params = event.get('queryStringParameters', {}) or {}
+                  playlist_name = query_params.get('playlist')
+                  if not playlist_name:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps('Playlist name is required')
+                      }
+
+                  # Determine the prefix based on user permissions
+                  prefix = f"playlists/{playlist_name}/" if is_admin else f"playlists/{user_id}/{playlist_name}/"
+                  
+                  # List all songs in the playlist
+                  response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+                  songs = []
+                  
+                  for obj in response.get('Contents', []):
+                      song_key = obj['Key']
+                      if song_key.endswith(('.wav', '.mp3', '.aac')):
+                          signed_url = get_signed_url(song_key)
+                          songs.append({
+                              'name': song_key.split('/')[-1],
+                              'url': signed_url
+                          })
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(songs)
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
+                  }
+      Runtime: python3.8
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
+          PRIVATE_KEY_PARAM: !Sub /cloudfront/${Environment}/private-key
+          KEY_PAIR_ID: !Ref CloudFrontKeyPairId
+
   # IAM role for the Lambda function
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -529,6 +641,34 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloudfront/${Environment}/*
+
+  # IAM role for RetrieveSongsLambda
+  RetrieveSongsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: RetrieveSongsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource: 
+                  - !Sub arn:aws:s3:::${SongsBucket}
+                  - !Sub arn:aws:s3:::${SongsBucket}/*
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
@@ -953,6 +1093,38 @@ Resources:
       # When absent, it lists all available playlists
       RequestParameters:
         method.request.querystring.playlist: false
+
+  # API Gateway resource for the retrieve songs endpoint
+  RetrieveSongsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: retrieve-songs
+      RestApiId: !Ref ApiGateway
+
+  # API Gateway method for the retrieve songs endpoint
+  RetrieveSongsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      HttpMethod: GET
+      ResourceId: !Ref RetrieveSongsResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt RetrieveSongsLambda.Arn
+
+  # Permission for API Gateway to invoke the RetrieveSongsLambda function
+  RetrieveSongsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt RetrieveSongsLambda.Arn
+      Principal: apigateway.amazonaws.com
 
   # Cognito User Pools Authorizer configuration
   # This authorizer validates JWT tokens issued by Cognito
