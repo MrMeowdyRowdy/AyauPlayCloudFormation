@@ -572,6 +572,125 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
 
+  # Lambda function to initialize Redshift tables
+  RedshiftInitLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub RedshiftInit-${Environment}
+      Handler: index.handler
+      Role: !GetAtt RedshiftInitRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          
+          redshift_data = boto3.client('redshift-data')
+          
+          def execute_sql(sql, database, cluster_id, db_user):
+              response = redshift_data.execute_statement(
+                  Database=database,
+                  ClusterIdentifier=cluster_id,
+                  DbUser=db_user,
+                  Sql=sql
+              )
+              return response['Id']
+          
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      cluster_id = event['ResourceProperties']['ClusterId']
+                      database = event['ResourceProperties']['Database']
+                      db_user = event['ResourceProperties']['DbUser']
+                      
+                      # Define table creation SQL statements
+                      sql_statements = """
+
+                      -- Playlists table
+                      CREATE TABLE IF NOT EXISTS playlists (
+                          playlist_id VARCHAR(255) PRIMARY KEY,
+                          name VARCHAR(255) NOT NULL,
+                          description VARCHAR(255) NOT NULL,
+                          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                      );
+
+                      -- Songs table
+                      CREATE TABLE IF NOT EXISTS songs (
+                          song_id VARCHAR(255) PRIMARY KEY,
+                          title VARCHAR(255) NOT NULL,
+                          artist VARCHAR(255),
+                          duration TIME NOT NULL,
+                          s3_key VARCHAR(512) NOT NULL,
+                          art_location VARCHAR(512),
+                          uploaded_by VARCHAR(255) REFERENCES users(user_id),
+                          uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                      );
+
+                      -- Playlist_Songs junction table
+                      CREATE TABLE IF NOT EXISTS playlist_songs (
+                          playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
+                          song_id VARCHAR(255) REFERENCES songs(song_id),
+                          added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                          PRIMARY KEY (playlist_id, song_id)
+                      );
+                      """
+                      
+                      # Execute SQL statements
+                      statement_id = execute_sql(sql_statements, database, cluster_id, db_user)
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'Message': 'Database initialized successfully',
+                          'StatementId': statement_id
+                      })
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'Message': 'No action required for DELETE'
+                      })
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {
+                      'Error': str(e)
+                  })
+      Runtime: python3.8
+      Timeout: 300  # 5 minutes
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+
+  # IAM role for RedshiftInit Lambda
+  RedshiftInitRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RedshiftDataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - redshift-data:ExecuteStatement
+                  - redshift-data:DescribeStatement
+                Resource: '*'
+
+  # Custom resource to trigger database initialization
+  RedshiftInitTrigger:
+    Type: Custom::RedshiftInit
+    DependsOn: RedshiftCluster
+    Properties:
+      ServiceToken: !GetAtt RedshiftInitLambda.Arn
+      ClusterId: !Sub ayauplay-cluster-${Environment}
+      Database: ayauplaydb
+      DbUser: !Ref RedshiftMasterUsername
+
   # API Gateway to expose the Lambda function
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
