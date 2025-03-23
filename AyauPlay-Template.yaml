@@ -870,6 +870,38 @@ Resources:
                               playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
                               granted_at TIMESTAMP DEFAULT GETDATE()
                           );
+                          """,
+                          # Insert sample data for playlists
+                          """
+                          INSERT INTO playlists (playlist_id, name, description, created_at, updated_at)
+                          VALUES 
+                          ('playlist1', 'Playlist 1', 'Description for Playlist 1', GETDATE(), GETDATE()),
+                          ('playlist2', 'Playlist 2', 'Description for Playlist 2', GETDATE(), GETDATE()),
+                          ('playlist3', 'Playlist 3', 'Description for Playlist 3', GETDATE(), GETDATE());
+                          """,
+                          # Insert sample data for songs
+                          """
+                          INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, art_location, uploaded_at)
+                          VALUES 
+                          ('song1', 'QVAH', 'Alejandro Miño', 'NOSOY', 'QZ5AB2142443', 1161026108, 12319328, 0, 's3://songs-bucket-dev/03 Qvah 1.1 MTLK 4416.wav', '', GETDATE()),
+                          ('song2', 'YANÓ', 'Alejandro Miño', 'NOSOY', 'DGA062238445', 23456, 234567, 0, 's3://songs-bucket-dev/02 Yanó 1.0 MTLK 4416.wav', '', GETDATE()),
+                          ('song3', 'ZEN', 'Alejandro Miño', 'NOSOY', 'DGA489238945', 2345672, 23456781, 0, 's3://songs-bucket-dev/04 Zen 1.0 MTLK 4416.wav', '', GETDATE());
+                          """,
+                          # Insert sample data for playlist_songs
+                          """
+                          INSERT INTO playlist_songs (playlist_id, song_id, added_at)
+                          VALUES 
+                          ('playlist1', 'song1', GETDATE()),
+                          ('playlist2', 'song2', GETDATE()),
+                          ('playlist3', 'song3', GETDATE());
+                          """,
+                          # Insert permissions for the specified user ID
+                          """
+                          INSERT INTO playlist_permissions (permission_id, user_id, playlist_id, granted_at)
+                          VALUES 
+                          ('perm1', 'c4489488-e081-7001-f0b1-6184251f36a5', 'playlist1', GETDATE()),
+                          ('perm2', 'c4489488-e081-7001-f0b1-6184251f36a5', 'playlist2', GETDATE()),
+                          ('perm3', 'c4489488-e081-7001-f0b1-6184251f36a5', 'playlist3', GETDATE());
                           """
                       ]
                       
