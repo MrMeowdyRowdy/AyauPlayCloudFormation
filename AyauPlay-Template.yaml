@@ -792,19 +792,10 @@ Resources:
                       # Define table creation SQL statements - execute one at a time
                       sql_statements = [
                           """
-                          CREATE TABLE IF NOT EXISTS users (
-                              user_id VARCHAR(255) PRIMARY KEY,
-                              username VARCHAR(255) NOT NULL,
-                              email VARCHAR(255) NOT NULL UNIQUE,
-                              created_at TIMESTAMP DEFAULT GETDATE()
-                          );
-                          """,
-                          """
                           CREATE TABLE IF NOT EXISTS playlists (
                               playlist_id VARCHAR(255) PRIMARY KEY,
                               name VARCHAR(255) NOT NULL,
                               description VARCHAR(255),
-                              user_id VARCHAR(255) REFERENCES users(user_id),
                               created_at TIMESTAMP DEFAULT GETDATE(),
                               updated_at TIMESTAMP DEFAULT GETDATE()
                           );
@@ -813,11 +804,14 @@ Resources:
                           CREATE TABLE IF NOT EXISTS songs (
                               song_id VARCHAR(255) PRIMARY KEY,
                               title VARCHAR(255) NOT NULL,
-                              artist VARCHAR(255),
+                              author VARCHAR(255) NOT NULL,
+                              performer VARCHAR(255) NOT NULL,
+                              ISRC VARCHAR(255) NOT NULL,
+                              IPI BIGINT NOT NULL,
+                              code BIGINT NOT NULL,
                               duration INTEGER,
                               s3_key VARCHAR(512) NOT NULL,
                               art_location VARCHAR(512),
-                              uploaded_by VARCHAR(255) REFERENCES users(user_id),
                               uploaded_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """,
@@ -833,7 +827,7 @@ Resources:
                           CREATE TABLE IF NOT EXISTS stream_analytics (
                               stream_id VARCHAR(255) PRIMARY KEY,
                               song_id VARCHAR(255) REFERENCES songs(song_id),
-                              username VARCHAR(255),
+                              user_id VARCHAR(255),
                               stream_duration INTEGER,
                               streamed_at TIMESTAMP DEFAULT GETDATE()
                           );
@@ -841,7 +835,7 @@ Resources:
                           """
                           CREATE TABLE IF NOT EXISTS playlist_permissions (
                               permission_id VARCHAR(255) PRIMARY KEY,
-                              user_id VARCHAR(255) REFERENCES users(user_id),
+                              user_id VARCHAR(255),
                               playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
                               granted_at TIMESTAMP DEFAULT GETDATE()
                           );
@@ -931,12 +925,15 @@ Resources:
               try:
                   body = json.loads(event['body'])
                   song_id = body['song_id']
-                  username = body['username']
                   stream_duration = body['stream_duration']
 
+                  # Extract user information from Cognito claims
+                  claims = event['requestContext']['authorizer']['claims']
+                  user_id = claims['sub']
+
                   sql = f"""
-                  INSERT INTO stream_analytics (stream_id, song_id, username, stream_duration, streamed_at)
-                  VALUES ('{uuid.uuid4()}', '{song_id}', '{username}', {stream_duration}, GETDATE());
+                  INSERT INTO stream_analytics (stream_id, song_id, user_id, stream_duration, streamed_at)
+                  VALUES ('{uuid.uuid4()}', '{song_id}', '{user_id}', {stream_duration}, GETDATE());
                   """
 
                   response = redshift_data.execute_statement(
