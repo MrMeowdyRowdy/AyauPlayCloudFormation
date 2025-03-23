@@ -822,6 +822,10 @@ Resources:
                       
                       # Define table creation SQL statements - execute one at a time
                       sql_statements = [
+                          # Create the database if it doesn't exist
+                          """
+                          CREATE DATABASE ayauplaydb;
+                          """,
                           """
                           CREATE TABLE IF NOT EXISTS playlists (
                               playlist_id VARCHAR(255) PRIMARY KEY,
