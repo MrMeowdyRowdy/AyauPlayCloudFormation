@@ -168,10 +168,11 @@ Resources:
           import boto3
           import base64
           import os
-          import mimetypes
+          import uuid
 
-          # Initialize S3 client
+          # Initialize S3 and Redshift clients
           s3 = boto3.client('s3')
+          redshift_data = boto3.client('redshift-data')
 
           # Define allowed audio file extensions and their MIME types
           ALLOWED_EXTENSIONS = {'.wav', '.mp3', '.aac'}
@@ -217,7 +218,15 @@ Resources:
                   body = json.loads(event['body'])
                   file_content = base64.b64decode(body['file'])
                   file_name = body['fileName']
-                  
+                  title = body['title']
+                  author = body['author']
+                  performer = body['performer']
+                  ISRC = body['ISRC']
+                  IPI = body['IPI']
+                  code = body['code']
+                  duration = body.get('duration', 0)
+                  art_location = body.get('art_location', '')
+
                   # Validate file type
                   if not is_valid_audio(file_name):
                       return {
@@ -228,17 +237,36 @@ Resources:
                   # Get the environment-specific bucket name
                   bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
                   
+                  # Generate a unique key for the S3 object
+                  s3_key = f"{uuid.uuid4()}_{file_name}"
+                  
                   # Upload file to S3 with proper content type
                   s3.put_object(
                       Bucket=bucket_name,
-                      Key=file_name,
+                      Key=s3_key,
                       Body=file_content,
                       ContentType=get_content_type(file_name)
                   )
 
+                  # Extract user information from Cognito claims
+                  claims = event['requestContext']['authorizer']['claims']
+                  uploaded_by = claims['sub']
+
+                  # Insert song details into the database
+                  sql = f"""
+                  INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, art_location, uploaded_by, uploaded_at)
+                  VALUES ('{uuid.uuid4()}', '{title}', '{author}', '{performer}', '{ISRC}', {IPI}, {code}, {duration}, '{s3_key}', '{art_location}', '{uploaded_by}', GETDATE());
+                  """
+                  redshift_data.execute_statement(
+                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                      Database=os.environ['REDSHIFT_DATABASE'],
+                      DbUser=os.environ['REDSHIFT_DB_USER'],
+                      Sql=sql
+                  )
+
                   return {
                       'statusCode': 200,
-                      'body': json.dumps('File uploaded successfully')
+                      'body': json.dumps('File uploaded and song details stored successfully')
                   }
               except Exception as e:
                   return {
@@ -249,6 +277,9 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
+          REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
+          REDSHIFT_DATABASE: ayauplaydb
+          REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
 
   # Lambda for playlist management
   PlaylistManagementLambda:
