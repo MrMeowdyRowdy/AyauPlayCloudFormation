@@ -1072,6 +1072,7 @@ Resources:
   # API Gateway method for the record stream endpoint
   RecordStreamMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: ApiGatewayAuthorizer
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
       HttpMethod: POST
@@ -1119,6 +1120,7 @@ Resources:
   # API Gateway method for the upload endpoint
   ApiGatewayMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: ApiGatewayAuthorizer
     Properties:
       AuthorizationType: COGNITO_USER_POOLS  # Use Cognito user pools for authorization
       AuthorizerId: !Ref ApiGatewayAuthorizer  # Reference to the authorizer
@@ -1155,6 +1157,7 @@ Resources:
   # - Getting songs in a playlist: GET /playlists?playlist=<playlist_name>
   PlaylistGetMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: ApiGatewayAuthorizer
     Properties:
       # Requires authentication via Cognito User Pools
       AuthorizationType: COGNITO_USER_POOLS
@@ -1194,6 +1197,7 @@ Resources:
   # API Gateway method for the retrieve songs endpoint
   RetrieveSongsMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: ApiGatewayAuthorizer
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref ApiGatewayAuthorizer
@@ -1426,6 +1430,7 @@ Resources:
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
+      - ApiGatewayAuthorizer
       - ApiGatewayMethod  # POST /upload
       - PlaylistGetMethod # GET /playlists
       - RetrieveSongsMethod # POST /retrieve-songs
