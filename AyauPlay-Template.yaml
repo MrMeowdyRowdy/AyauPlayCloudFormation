@@ -1170,10 +1170,10 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "http://localhost:5173"
-              method.response.header.Access-Control-Allow-Headers: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
-              method.response.header.Access-Control-Allow-Methods: "GET,OPTIONS"
-              method.response.header.Access-Control-Allow-Credentials: "true"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
         Uri: !Sub
@@ -1219,9 +1219,9 @@ Resources:
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "*"
-            method.response.header.Access-Control-Allow-Headers: "*"
-            method.response.header.Access-Control-Allow-Methods: "POST"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Headers: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
 
   # Permission for API Gateway to invoke the RetrieveSongsLambda function
   RetrieveSongsLambdaPermission:
