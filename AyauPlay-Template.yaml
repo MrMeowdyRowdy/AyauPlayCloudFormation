@@ -1526,8 +1526,16 @@ Resources:
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
-      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
-    DependsOn: ApiGatewayMethod  # Depends on the method being created
+      RestApiId: !Ref ApiGateway
+    DependsOn: 
+      - ApiGatewayMethod
+      - ApiGatewayOptionsMethod
+      - PlaylistGetMethod
+      - PlaylistOptionsMethod
+      - RetrieveSongsMethod
+      - RetrieveSongsOptionsMethod
+      - RecordStreamMethod
+      - RecordStreamOptionsMethod
 
   # WAF WebACL association with the API Gateway stage
   WAFWebACLAssociation:
