@@ -1239,21 +1239,24 @@ Resources:
       ResourceId: !Ref PlaylistResource
       RestApiId: !Ref ApiGateway
       Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        Type: MOCK
+              method.response.header.Access-Control-Max-Age: "'3600'"
+        PassthroughBehavior: WHEN_NO_MATCH
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Max-Age: true
 
   # API Gateway resource for the retrieve songs endpoint
   RetrieveSongsResource:
