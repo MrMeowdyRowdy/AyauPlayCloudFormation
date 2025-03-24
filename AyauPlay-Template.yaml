@@ -1075,6 +1075,7 @@ Resources:
     DependsOn: ApiGatewayAuthorizer
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
       HttpMethod: POST
       ResourceId: !Ref RecordStreamResource
       RestApiId: !Ref ApiGateway
@@ -1258,6 +1259,17 @@ Resources:
       FunctionName: !GetAtt PlaylistManagementLambda.Arn
       Principal: apigateway.amazonaws.com
 
+  # Create a user pool client for authentication
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: !Sub UserPoolClient-${Environment}
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
   # WAF WebACL to protect the API Gateway
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
@@ -1431,6 +1443,7 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - ApiGatewayAuthorizer
+      - UserPoolClient
       - ApiGatewayMethod  # POST /upload
       - PlaylistGetMethod # GET /playlists
       - RetrieveSongsMethod # POST /retrieve-songs
