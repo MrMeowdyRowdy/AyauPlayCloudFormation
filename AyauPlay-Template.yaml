@@ -1074,22 +1074,25 @@ Resources:
     Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref ApiGatewayAuthorizer
       HttpMethod: POST
       ResourceId: !Ref RecordStreamResource
       RestApiId: !Ref ApiGateway
       Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
-          - LambdaArn: !GetAtt RecordStreamLambda.Arn
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecordStreamLambda.Arn}/invocations
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
 
   # Permission for API Gateway to invoke the RecordStreamLambda function
   RecordStreamLambdaPermission:
@@ -1422,13 +1425,14 @@ Resources:
   # API Gateway deployment configuration
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
-    Properties:
-      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
     DependsOn: 
-      - ApiGatewayMethod
-      - PlaylistGetMethod
-      - RetrieveSongsMethod
-      - RecordStreamMethod
+      - ApiGatewayMethod  # POST /upload
+      - PlaylistGetMethod # GET /playlists
+      - RetrieveSongsMethod # POST /retrieve-songs
+      - RecordStreamMethod # POST /record-stream
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: !Ref Environment
 
   # WAF WebACL association with the API Gateway stage
   WAFWebACLAssociation:
@@ -1445,11 +1449,6 @@ Conditions:
     Fn::Equals:
       - !Ref Environment
       - dev
-  OptionsMethodExists:
-    Fn::Not:
-      - Fn::Equals:
-          - !Ref "AWS::NoValue"
-          - !Ref "AWS::NoValue"
 
 Outputs:
   # Output the URL for the API Gateway
