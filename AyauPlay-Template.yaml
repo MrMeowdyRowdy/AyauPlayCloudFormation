@@ -1430,25 +1430,25 @@ Resources:
               - !Ref Environment
               - dev
 
-  # API Gateway stage configuration
-  ApiGatewayStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      StageName: !Ref Environment  # Stage name
-      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
-      DeploymentId: !Ref ApiGatewayDeployment  # Reference to the deployment
-
   # API Gateway deployment configuration
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - ApiGatewayAuthorizer
       - UserPoolClient
-      - ApiGatewayMethod  # POST /upload
-      - PlaylistGetMethod # GET /playlists
-      - RetrieveSongsMethod # POST /retrieve-songs
-      - RecordStreamMethod # POST /record-stream
+      - ApiGatewayMethod
+      - PlaylistGetMethod
+      - RetrieveSongsMethod
+      - RecordStreamMethod
     Properties:
+      RestApiId: !Ref ApiGateway
+
+  # API Gateway stage configuration
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    DependsOn: ApiGatewayDeployment
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref ApiGateway
       StageName: !Ref Environment
 
@@ -1456,11 +1456,10 @@ Resources:
   WAFWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/restapis/${ApiGateway}/stages/${Environment}  # API Gateway stage ARN
-      WebACLArn: !GetAtt WAFWebACL.Arn  # WebACL ARN
-    DependsOn: 
-      - ApiGatewayStage  # Depends on the stage being created
-      - ApiGatewayDeployment  # Depends on the deployment being created
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/restapis/${ApiGateway}/stages/${Environment}
+      WebACLArn: !GetAtt WAFWebACL.Arn
+    DependsOn:
+      - ApiGatewayStage
 
 Conditions:
   IsDev:
