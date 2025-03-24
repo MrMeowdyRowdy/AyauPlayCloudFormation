@@ -1089,32 +1089,7 @@ Resources:
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: "'*'"
             method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-
-  # OPTIONS method for the record stream endpoint
-  RecordStreamOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      AuthorizationType: NONE
-      HttpMethod: OPTIONS
-      ResourceId: !Ref RecordStreamResource
-      RestApiId: !Ref ApiGateway
-      Integration:
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        Type: MOCK
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
 
   # Permission for API Gateway to invoke the RecordStreamLambda function
   RecordStreamLambdaPermission:
@@ -1158,32 +1133,7 @@ Resources:
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: "'*'"
             method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-
-  # OPTIONS method for the upload endpoint
-  ApiGatewayOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      AuthorizationType: NONE
-      HttpMethod: OPTIONS
-      ResourceId: !Ref ApiGatewayResource
-      RestApiId: !Ref ApiGateway
-      Integration:
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        Type: MOCK
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
 
   # Defines the /playlists resource endpoint in API Gateway
   # This resource handles all playlist-related operations
@@ -1228,36 +1178,7 @@ Resources:
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: "'*'"
             method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-
-  # OPTIONS method for the /playlists endpoint
-  PlaylistOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Condition: OptionsMethodExists
-    Properties:
-      AuthorizationType: NONE
-      HttpMethod: OPTIONS
-      ResourceId: !Ref PlaylistResource
-      RestApiId: !Ref ApiGateway
-      Integration:
-        Type: MOCK
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Max-Age: "'3600'"
-        PassthroughBehavior: WHEN_NO_MATCH
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Max-Age: true
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
 
   # API Gateway resource for the retrieve songs endpoint
   RetrieveSongsResource:
@@ -1287,32 +1208,7 @@ Resources:
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: "'*'"
             method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-
-  # OPTIONS method for the retrieve songs endpoint
-  RetrieveSongsOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      AuthorizationType: NONE
-      HttpMethod: OPTIONS
-      ResourceId: !Ref RetrieveSongsResource
-      RestApiId: !Ref ApiGateway
-      Integration:
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        Type: MOCK
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+            method.response.header.Access-Control-Allow-Methods: "'POST'"
 
   # Permission for API Gateway to invoke the RetrieveSongsLambda function
   RetrieveSongsLambdaPermission:
@@ -1530,13 +1426,9 @@ Resources:
       RestApiId: !Ref ApiGateway  # Reference to the API Gateway
     DependsOn: 
       - ApiGatewayMethod
-      - ApiGatewayOptionsMethod
       - PlaylistGetMethod
-      - PlaylistOptionsMethod
       - RetrieveSongsMethod
-      - RetrieveSongsOptionsMethod
       - RecordStreamMethod
-      - RecordStreamOptionsMethod
 
   # WAF WebACL association with the API Gateway stage
   WAFWebACLAssociation:
