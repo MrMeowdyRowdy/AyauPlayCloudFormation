@@ -1233,6 +1233,7 @@ Resources:
   # OPTIONS method for the /playlists endpoint
   PlaylistOptionsMethod:
     Type: AWS::ApiGateway::Method
+    Condition: OptionsMethodExists
     Properties:
       AuthorizationType: NONE
       HttpMethod: OPTIONS
@@ -1526,7 +1527,7 @@ Resources:
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
-      RestApiId: !Ref ApiGateway
+      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
     DependsOn: 
       - ApiGatewayMethod
       - ApiGatewayOptionsMethod
@@ -1552,6 +1553,11 @@ Conditions:
     Fn::Equals:
       - !Ref Environment
       - dev
+  OptionsMethodExists:
+    Fn::Not:
+      - Fn::Equals:
+          - !Ref "AWS::NoValue"
+          - !Ref "AWS::NoValue"
 
 Outputs:
   # Output the URL for the API Gateway
