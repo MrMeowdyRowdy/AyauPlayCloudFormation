@@ -93,7 +93,11 @@ Resources:
         CorsRules:
           - AllowedHeaders: ['*']
             AllowedMethods: [GET, PUT, POST, DELETE]
-            AllowedOrigins: ['*']
+            AllowedOrigins:
+              - !If
+                - IsDev
+                - 'http://localhost:5173'
+                - '*'
             MaxAge: 3000
 
   # CloudFront Origin Access Control
@@ -1360,6 +1364,29 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesSQLiRuleSet
 
+        - Name: AllowLocalhostDev
+          Priority: 0
+          Action:
+            Allow: {}
+          Statement:
+            ByteMatchStatement:
+              SearchString: 'localhost:5173'
+              FieldToMatch:
+                SingleHeader:
+                  Name: origin
+              TextTransformations:
+                - Priority: 1
+                  Type: NONE
+              PositionalConstraint: EXACTLY
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AllowLocalhostDev
+          Condition:
+            StringEquals:
+              - !Ref Environment
+              - dev
+
   # API Gateway stage configuration
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
@@ -1384,6 +1411,12 @@ Resources:
     DependsOn: 
       - ApiGatewayStage  # Depends on the stage being created
       - ApiGatewayDeployment  # Depends on the deployment being created
+
+Conditions:
+  IsDev:
+    Fn::Equals:
+      - !Ref Environment
+      - dev
 
 Outputs:
   # Output the URL for the API Gateway
