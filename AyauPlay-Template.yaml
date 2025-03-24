@@ -1175,12 +1175,6 @@ Resources:
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt PlaylistManagementLambda.Arn
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'GET'"
       # Configures the optional 'playlist' query parameter
       # When present, it retrieves songs from a specific playlist
       # When absent, it lists all available playlists
@@ -1189,34 +1183,9 @@ Resources:
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-
-  # OPTIONS method for playlists endpoint
-  PlaylistOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      AuthorizationType: NONE
-      HttpMethod: OPTIONS
-      ResourceId: !Ref PlaylistResource
-      RestApiId: !Ref ApiGateway
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Headers: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET'"
 
   # API Gateway resource for the retrieve songs endpoint
   RetrieveSongsResource:
@@ -1300,19 +1269,6 @@ Resources:
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
-      AllowedOAuthFlows:
-        - implicit
-      AllowedOAuthFlowsUserPoolClient: true
-      AllowedOAuthScopes:
-        - email
-        - openid
-        - profile
-      CallbackURLs:
-        - http://localhost:5173
-      LogoutURLs:
-        - http://localhost:5173
-      SupportedIdentityProviders:
-        - COGNITO
 
   # WAF WebACL to protect the API Gateway
   WAFWebACL:
@@ -1482,7 +1438,6 @@ Resources:
       - UserPoolClient
       - ApiGatewayMethod
       - PlaylistGetMethod
-      - PlaylistOptionsMethod
       - RetrieveSongsMethod
       - RecordStreamMethod
     Properties:
