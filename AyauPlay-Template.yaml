@@ -1167,11 +1167,15 @@ Resources:
       ResourceId: !Ref PlaylistResource
       RestApiId: !Ref ApiGateway
       Integration:
-        # POST is used for Lambda proxy integration despite being a GET endpoint
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
         IntegrationHttpMethod: POST
-        # AWS_PROXY enables automatic request/response mapping with Lambda
         Type: AWS_PROXY
-        # The Lambda function ARN that will handle playlist operations
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt PlaylistManagementLambda.Arn
@@ -1183,9 +1187,39 @@ Resources:
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'GET'"
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+
+  # Add OPTIONS method for CORS preflight requests
+  PlaylistOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref PlaylistResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+            ResponseTemplates:
+              application/json: "{}"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
 
   # API Gateway resource for the retrieve songs endpoint
   RetrieveSongsResource:
