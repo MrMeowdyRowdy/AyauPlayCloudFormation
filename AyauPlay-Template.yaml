@@ -1086,6 +1086,7 @@ Resources:
               method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecordStreamLambda.Arn}/invocations
@@ -1095,6 +1096,7 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
 
   # Permission for API Gateway to invoke the RecordStreamLambda function
   RecordStreamLambdaPermission:
@@ -1134,12 +1136,50 @@ Resources:
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt UploadSongsLambda.Arn  # Lambda function ARN
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+
+  # Add OPTIONS method for CORS preflight
+  UploadOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref ApiGatewayResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
 
   # Defines the /playlists resource endpoint in API Gateway
   # This resource handles all playlist-related operations
@@ -1216,12 +1256,20 @@ Resources:
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt RetrieveSongsLambda.Arn
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Headers: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'POST'"
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
 
   # Permission for API Gateway to invoke the RetrieveSongsLambda function
   RetrieveSongsLambdaPermission:
@@ -1282,12 +1330,42 @@ Resources:
       Name: !Sub WebACL-${Environment}  # Name of the WebACL
       Scope: REGIONAL  # Scope of the WebACL
       DefaultAction:
-        Block: {}  # Default action is to block requests
+        Allow: {}  # Default action is to allow requests
       VisibilityConfig:
         SampledRequestsEnabled: true  # Enable sampling of requests
         CloudWatchMetricsEnabled: true  # Enable CloudWatch metrics
         MetricName: !Sub WebACL-${Environment}  # Metric name
       Rules:
+        - Name: AllowLocalhostDev
+          Priority: 0  # Highest priority
+          Action:
+            Allow: {}
+          Statement:
+            OrStatement:
+              Statements:
+                - ByteMatchStatement:
+                    SearchString: 'http://localhost:5173'
+                    FieldToMatch:
+                      SingleHeader:
+                        Name: origin
+                    TextTransformations:
+                      - Priority: 1
+                        Type: NONE
+                    PositionalConstraint: EXACTLY
+                - ByteMatchStatement:
+                    SearchString: 'localhost:5173'
+                    FieldToMatch:
+                      SingleHeader:
+                        Name: origin
+                    TextTransformations:
+                      - Priority: 1
+                        Type: NONE
+                    PositionalConstraint: CONTAINS
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AllowLocalhostDev
+
         # Rate limiting rule to prevent DDoS attacks
         - Name: RateLimitRule
           Priority: 1
@@ -1411,29 +1489,6 @@ Resources:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesSQLiRuleSet
-
-        - Name: AllowLocalhostDev
-          Priority: 0
-          Action:
-            Allow: {}
-          Statement:
-            ByteMatchStatement:
-              SearchString: 'localhost:5173'
-              FieldToMatch:
-                SingleHeader:
-                  Name: origin
-              TextTransformations:
-                - Priority: 1
-                  Type: NONE
-              PositionalConstraint: EXACTLY
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: AllowLocalhostDev
-          Condition:
-            StringEquals:
-              - !Ref Environment
-              - dev
 
   # API Gateway deployment configuration
   ApiGatewayDeployment:
