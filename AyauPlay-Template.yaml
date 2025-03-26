@@ -1538,24 +1538,6 @@ Resources:
           - IsDev
           - 'http://localhost:5173'
           - 'https://ayau.mindsoftdev.com'
-      OAuth:
-        AllowedOAuthFlows:
-          - implicit
-          - code
-        AllowedOAuthScopes:
-          - email
-          - openid
-          - profile
-        CallbackURLs:
-          - !If
-            - IsDev
-            - 'http://localhost:5173'
-            - 'https://ayau.mindsoftdev.com'
-        LogoutURLs:
-          - !If
-            - IsDev
-            - 'http://localhost:5173'
-            - 'https://ayau.mindsoftdev.com'
 
   # Add domain name for the User Pool
   UserPoolDomain:
