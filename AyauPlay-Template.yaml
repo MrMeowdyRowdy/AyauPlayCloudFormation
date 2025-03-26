@@ -403,7 +403,15 @@ Resources:
                   playlist_name = playlist_path.split('/')[-1]
                   playlists.append(playlist_name)
               
-              return {"playlists": playlists}
+              return {
+                  "statusCode": 200,
+                  "headers": {
+                      "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                      "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                      "Access-Control-Allow-Methods": "GET"
+                  },
+                  "body": json.dumps({"playlists": playlists})
+              }
 
           def get_playlist_songs(user_id, playlist_name, groups):
               """
@@ -432,7 +440,15 @@ Resources:
                           'url': signed_url
                       })
               
-              return {"songs": songs}
+              return {
+                  "statusCode": 200,
+                  "headers": {
+                      "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                      "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                      "Access-Control-Allow-Methods": "GET"
+                  },
+                  "body": json.dumps({"songs": songs})
+              }
 
           def handler(event, context):
               """
