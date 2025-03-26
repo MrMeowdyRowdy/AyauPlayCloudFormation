@@ -1412,28 +1412,28 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesSQLiRuleSet
 
-        - Name: AllowLocalhostDev
-          Priority: 0
-          Action:
-            Allow: {}
-          Statement:
-            ByteMatchStatement:
-              SearchString: 'localhost:5173'
-              FieldToMatch:
-                SingleHeader:
-                  Name: origin
-              TextTransformations:
-                - Priority: 1
-                  Type: NONE
-              PositionalConstraint: EXACTLY
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: AllowLocalhostDev
-          Condition:
-            StringEquals:
-              - !Ref Environment
-              - dev
+        # Allow requests from localhost in dev environment
+        - !If
+          - IsDev
+          - Name: AllowLocalhostDev
+            Priority: 0
+            Action:
+              Allow: {}
+            Statement:
+              ByteMatchStatement:
+                SearchString: 'localhost:5173'
+                FieldToMatch:
+                  SingleHeader:
+                    Name: origin
+                TextTransformations:
+                  - Priority: 1
+                    Type: NONE
+                PositionalConstraint: EXACTLY
+            VisibilityConfig:
+              SampledRequestsEnabled: true
+              CloudWatchMetricsEnabled: true
+              MetricName: AllowLocalhostDev
+          - !Ref "AWS::NoValue"
 
   # API Gateway deployment configuration
   ApiGatewayDeployment:
