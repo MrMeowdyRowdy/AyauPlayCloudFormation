@@ -310,11 +310,21 @@ Resources:
 
                   return {
                       'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'POST'
+                      },
                       'body': json.dumps('File uploaded and song details stored successfully')
                   }
               except Exception as e:
                   return {
                       'statusCode': 500,
+                      'headers': {
+                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'POST'
+                      },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8  # Runtime environment
@@ -447,21 +457,41 @@ Resources:
                       if 'playlist' in query_params:
                           return {
                               'statusCode': 200,
+                              'headers': {
+                                  'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                                  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                                  'Access-Control-Allow-Methods': 'GET'
+                              },
                               'body': json.dumps(get_playlist_songs(user_id, query_params['playlist'], groups))
                           }
                       else:
                           return {
                               'statusCode': 200,
+                              'headers': {
+                                  'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                                  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                                  'Access-Control-Allow-Methods': 'GET'
+                              },
                               'body': json.dumps(list_playlists(user_id, groups))
                           }
                   else:
                       return {
                           'statusCode': 405,
+                          'headers': {
+                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                              'Access-Control-Allow-Methods': 'GET'
+                          },
                           'body': json.dumps('Method not allowed')
                       }
               except Exception as e:
                   return {
                       'statusCode': 500,
+                      'headers': {
+                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'GET'
+                      },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8
@@ -630,11 +660,21 @@ Resources:
                   
                   return {
                       'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'POST'
+                      },
                       'body': json.dumps(songs)
                   }
               except Exception as e:
                   return {
                       'statusCode': 500,
+                      'headers': {
+                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'POST'
+                      },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8
@@ -1052,11 +1092,21 @@ Resources:
 
                   return {
                       'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'POST'
+                      },
                       'body': json.dumps('Stream data recorded successfully')
                   }
               except Exception as e:
                   return {
                       'statusCode': 500,
+                      'headers': {
+                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'POST'
+                      },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8
