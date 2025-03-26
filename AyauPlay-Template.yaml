@@ -1691,7 +1691,8 @@ Resources:
       RestApiId: !Ref ApiGateway
       StageName: !Ref Environment
       Variables:
-        AllowOrigin: 'https://ayau.mindsoftdev.com'
+        # Remove or update the AllowOrigin variable if it conflicts with CORS headers
+        AllowOrigin: '*'
 
   # WAF WebACL association with the API Gateway stage
   WAFWebACLAssociation:
