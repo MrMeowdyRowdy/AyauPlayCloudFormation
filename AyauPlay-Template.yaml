@@ -1131,6 +1131,11 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
+      RequestParameters:
+        method.request.header.Authorization: true
+        method.request.header.Origin: false
+        method.request.header.Access-Control-Request-Method: false
+        method.request.header.Access-Control-Request-Headers: false
 
   # Permission for API Gateway to invoke the RecordStreamLambda function
   RecordStreamLambdaPermission:
@@ -1148,6 +1153,8 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
+      BinaryMediaTypes:
+        - '*/*'
 
   # API Gateway resource for the upload endpoint
   ApiGatewayResource:
@@ -1186,7 +1193,10 @@ Resources:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
       RequestParameters:
+        method.request.header.Authorization: true
         method.request.header.Origin: false
+        method.request.header.Access-Control-Request-Method: false
+        method.request.header.Access-Control-Request-Headers: false
 
   # OPTIONS method for the upload endpoint
   ApiGatewayOptionsMethod:
@@ -1255,6 +1265,10 @@ Resources:
       # When present, it retrieves songs from a specific playlist
       # When absent, it lists all available playlists
       RequestParameters:
+        method.request.header.Authorization: true
+        method.request.header.Origin: false
+        method.request.header.Access-Control-Request-Method: false
+        method.request.header.Access-Control-Request-Headers: false
         method.request.querystring.playlist: false
       MethodResponses:
         - StatusCode: 200
@@ -1325,6 +1339,11 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
+      RequestParameters:
+        method.request.header.Authorization: true
+        method.request.header.Origin: false
+        method.request.header.Access-Control-Request-Method: false
+        method.request.header.Access-Control-Request-Headers: false
 
   # OPTIONS method for the retrieve songs endpoint
   RetrieveSongsOptionsMethod:
@@ -1403,6 +1422,7 @@ Resources:
       # Links this authorizer to the Cognito User Pool
       ProviderARNs:
         - !GetAtt UserPool.Arn
+      AuthorizerResultTtlInSeconds: 0
 
   # Permission for API Gateway to invoke the Lambda function
   LambdaPermission:
