@@ -275,6 +275,11 @@ Resources:
                   if not is_valid_audio(file_name):
                       return {
                           'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Headers': 'Content-Type',
+                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          },
                           'body': json.dumps('Only .wav, .mp3, and .aac files are allowed')
                       }
 
@@ -311,9 +316,9 @@ Resources:
                   return {
                       'statusCode': 200,
                       'headers': {
+                          'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
                       },
                       'body': json.dumps('File uploaded and song details stored successfully')
                   }
@@ -321,9 +326,9 @@ Resources:
                   return {
                       'statusCode': 500,
                       'headers': {
+                          'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
@@ -406,9 +411,9 @@ Resources:
               return {
                   "statusCode": 200,
                   "headers": {
+                      "Access-Control-Allow-Headers": "Content-Type",
                       "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
-                      "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                      "Access-Control-Allow-Methods": "GET"
+                      "Access-Control-Allow-Methods": "OPTIONS,GET"
                   },
                   "body": json.dumps({"playlists": playlists})
               }
@@ -443,9 +448,9 @@ Resources:
               return {
                   "statusCode": 200,
                   "headers": {
+                      "Access-Control-Allow-Headers": "Content-Type",
                       "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
-                      "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                      "Access-Control-Allow-Methods": "GET"
+                      "Access-Control-Allow-Methods": "OPTIONS,GET"
                   },
                   "body": json.dumps({"songs": songs})
               }
@@ -474,9 +479,9 @@ Resources:
                           return {
                               'statusCode': 200,
                               'headers': {
+                                  'Access-Control-Allow-Headers': 'Content-Type',
                                   'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                                  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                                  'Access-Control-Allow-Methods': 'GET'
+                                  'Access-Control-Allow-Methods': 'OPTIONS,GET'
                               },
                               'body': json.dumps(get_playlist_songs(user_id, query_params['playlist'], groups))
                           }
@@ -484,9 +489,9 @@ Resources:
                           return {
                               'statusCode': 200,
                               'headers': {
+                                  'Access-Control-Allow-Headers': 'Content-Type',
                                   'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                                  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                                  'Access-Control-Allow-Methods': 'GET'
+                                  'Access-Control-Allow-Methods': 'OPTIONS,GET'
                               },
                               'body': json.dumps(list_playlists(user_id, groups))
                           }
@@ -494,9 +499,9 @@ Resources:
                       return {
                           'statusCode': 405,
                           'headers': {
+                              'Access-Control-Allow-Headers': 'Content-Type',
                               'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                              'Access-Control-Allow-Methods': 'GET'
+                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
                           },
                           'body': json.dumps('Method not allowed')
                       }
@@ -504,9 +509,9 @@ Resources:
                   return {
                       'statusCode': 500,
                       'headers': {
+                          'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'GET'
+                          'Access-Control-Allow-Methods': 'OPTIONS,GET'
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
@@ -655,6 +660,11 @@ Resources:
                   if not playlist_id:
                       return {
                           'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Headers': 'Content-Type',
+                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          },
                           'body': json.dumps('Playlist ID is required')
                       }
 
@@ -677,9 +687,9 @@ Resources:
                   return {
                       'statusCode': 200,
                       'headers': {
+                          'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
                       },
                       'body': json.dumps(songs)
                   }
@@ -687,9 +697,9 @@ Resources:
                   return {
                       'statusCode': 500,
                       'headers': {
+                          'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
@@ -1109,9 +1119,9 @@ Resources:
                   return {
                       'statusCode': 200,
                       'headers': {
+                          'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
                       },
                       'body': json.dumps('Stream data recorded successfully')
                   }
@@ -1119,9 +1129,9 @@ Resources:
                   return {
                       'statusCode': 500,
                       'headers': {
+                          'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
