@@ -1487,13 +1487,14 @@ Resources:
       StageName: !Ref Environment
 
   # WAF WebACL association with the API Gateway stage
-  WAFWebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/restapis/${ApiGateway}/stages/${Environment}
-      WebACLArn: !GetAtt WAFWebACL.Arn
-    DependsOn:
-      - ApiGatewayStage
+  # Commenting out this section to disable WAF temporarily
+  # WAFWebACLAssociation:
+  #   Type: AWS::WAFv2::WebACLAssociation
+  #   Properties:
+  #     ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/restapis/${ApiGateway}/stages/${Environment}
+  #     WebACLArn: !GetAtt WAFWebACL.Arn
+  #   DependsOn:
+  #     - ApiGatewayStage
 
 Conditions:
   IsDev:
