@@ -397,7 +397,10 @@ Resources:
                       DbUser=os.environ['REDSHIFT_DB_USER'],
                       Sql=sql
                   )
-                  playlist_ids = [row['playlist_id'] for row in response['Records']]
+                  # Safely handle missing 'Records' key
+                  playlist_ids = [
+                      row['playlist_id'] for row in response.get('Records', [])
+                  ]
                   prefix = f"playlists/{user_id}/" if not playlist_ids else f"playlists/({','.join(playlist_ids)})/"
 
               response = s3.list_objects_v2(Bucket=bucket_name, Delimiter='/', Prefix=prefix)
