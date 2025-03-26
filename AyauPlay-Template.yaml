@@ -118,7 +118,6 @@ Resources:
       ResponseHeadersPolicyConfig:
         Name: !Sub CORSPolicy-${Environment}
         CorsConfig:
-          AccessControlAllowCredentials: true
           AccessControlAllowHeaders:
             Items:
               - Content-Type
@@ -1119,9 +1118,9 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecordStreamLambda.Arn}/invocations
@@ -1183,9 +1182,9 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -1253,9 +1252,9 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET'"
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
         Uri: !Sub
@@ -1330,9 +1329,9 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'*'"
-              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
