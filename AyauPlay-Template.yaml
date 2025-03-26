@@ -127,7 +127,6 @@ Resources:
               - X-Api-Key
               - X-Amz-Security-Token
               - Access-Control-Allow-Origin
-            Quantity: 6
           AccessControlAllowMethods:
             Items:
               - GET
@@ -137,15 +136,12 @@ Resources:
               - PATCH
               - POST
               - DELETE
-            Quantity: 7
           AccessControlAllowOrigins:
             Items:
               - '*'
-            Quantity: 1
           AccessControlExposeHeaders:
             Items:
               - '*'
-            Quantity: 1
           AccessControlMaxAgeSec: 600
           OriginOverride: false
 
