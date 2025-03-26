@@ -1488,7 +1488,7 @@ Resources:
       # Links this authorizer to the Cognito User Pool
       ProviderARNs:
         - !GetAtt UserPool.Arn
-      AuthorizerResultTtlInSeconds: 0
+      AuthorizerResultTtlInSeconds: 300
 
   # Permission for API Gateway to invoke the Lambda function
   LambdaPermission:
@@ -1515,6 +1515,54 @@ Resources:
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AllowedOAuthFlows:
+        - implicit
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - !If
+          - IsDev
+          - 'http://localhost:5173'
+          - 'https://ayau.mindsoftdev.com'
+      LogoutURLs:
+        - !If
+          - IsDev
+          - 'http://localhost:5173'
+          - 'https://ayau.mindsoftdev.com'
+      OAuth:
+        AllowedOAuthFlows:
+          - implicit
+          - code
+        AllowedOAuthScopes:
+          - email
+          - openid
+          - profile
+        CallbackURLs:
+          - !If
+            - IsDev
+            - 'http://localhost:5173'
+            - 'https://ayau.mindsoftdev.com'
+        LogoutURLs:
+          - !If
+            - IsDev
+            - 'http://localhost:5173'
+            - 'https://ayau.mindsoftdev.com'
+
+  # Add domain name for the User Pool
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub ayauplay-${Environment}-${AWS::AccountId}
+      UserPoolId: !Ref UserPool
 
   # WAF WebACL to protect the API Gateway
   WAFWebACL:
@@ -1792,3 +1840,15 @@ Outputs:
   RedshiftClusterEndpoint:
     Description: Endpoint for Redshift cluster
     Value: !Sub ${RedshiftCluster.Endpoint.Address}:${RedshiftCluster.Endpoint.Port}
+
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+
+  CognitoUserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+
+  CognitoUserPoolDomain:
+    Description: Cognito User Pool Domain
+    Value: !Sub https://ayauplay-${Environment}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com
