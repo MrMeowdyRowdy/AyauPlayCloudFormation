@@ -96,7 +96,7 @@ Resources:
             AllowedOrigins:
               - !If
                 - IsDev
-                - 'https://ayau.mindsoftdev.com'
+                - 'http://localhost:5173'
                 - '*'
             MaxAge: 3000
 
@@ -270,24 +270,12 @@ Resources:
 
                   return {
                       'statusCode': 200,
-                      'body': json.dumps('File uploaded and song details stored successfully'),
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST,OPTIONS',
-                          'Access-Control-Allow-Credentials': 'true'
-                      }
+                      'body': json.dumps('File uploaded and song details stored successfully')
                   }
               except Exception as e:
                   return {
                       'statusCode': 500,
-                      'body': json.dumps(f'Error: {str(e)}'),
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST,OPTIONS',
-                          'Access-Control-Allow-Credentials': 'true'
-                      }
+                      'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8  # Runtime environment
       Environment:
@@ -414,38 +402,26 @@ Resources:
                   operation = event['httpMethod']
                   query_params = event.get('queryStringParameters', {}) or {}
                   
-                  # Add CORS headers to all responses
-                  headers = {
-                      'Access-Control-Allow-Origin': '*',
-                      'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                      'Access-Control-Allow-Methods': 'GET,OPTIONS',
-                      'Access-Control-Allow-Credentials': 'true'
-                  }
-                  
                   # Handle GET requests for playlist operations
                   if operation == 'GET':
                       if 'playlist' in query_params:
                           return {
                               'statusCode': 200,
-                              'headers': headers,
                               'body': json.dumps(get_playlist_songs(user_id, query_params['playlist'], groups))
                           }
                       else:
                           return {
                               'statusCode': 200,
-                              'headers': headers,
                               'body': json.dumps(list_playlists(user_id, groups))
                           }
                   else:
                       return {
                           'statusCode': 405,
-                          'headers': headers,
                           'body': json.dumps('Method not allowed')
                       }
               except Exception as e:
                   return {
                       'statusCode': 500,
-                      'headers': headers,
                       'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8
@@ -593,13 +569,7 @@ Resources:
                   if not playlist_id:
                       return {
                           'statusCode': 400,
-                          'body': json.dumps('Playlist ID is required'),
-                          'headers': {
-                              'Access-Control-Allow-Origin': '*',
-                              'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                              'Access-Control-Allow-Methods': 'POST,OPTIONS',
-                              'Access-Control-Allow-Credentials': 'true'
-                          }
+                          'body': json.dumps('Playlist ID is required')
                       }
 
                   # Determine the prefix based on user permissions
@@ -620,24 +590,12 @@ Resources:
                   
                   return {
                       'statusCode': 200,
-                      'body': json.dumps(songs),
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST,OPTIONS',
-                          'Access-Control-Allow-Credentials': 'true'
-                      }
+                      'body': json.dumps(songs)
                   }
               except Exception as e:
                   return {
                       'statusCode': 500,
-                      'body': json.dumps(f'Error: {str(e)}'),
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST,OPTIONS',
-                          'Access-Control-Allow-Credentials': 'true'
-                      }
+                      'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8
       Environment:
@@ -1058,24 +1016,12 @@ Resources:
 
                   return {
                       'statusCode': 200,
-                      'body': json.dumps('Stream data recorded successfully'),
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST,OPTIONS',
-                          'Access-Control-Allow-Credentials': 'true'
-                      }
+                      'body': json.dumps('Stream data recorded successfully')
                   }
               except Exception as e:
                   return {
                       'statusCode': 500,
-                      'body': json.dumps(f'Error: {str(e)}'),
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST,OPTIONS',
-                          'Access-Control-Allow-Credentials': 'true'
-                      }
+                      'body': json.dumps(f'Error: {str(e)}')
                   }
       Runtime: python3.8
       Environment:
@@ -1137,19 +1083,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 400
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 500
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
               method.response.header.Access-Control-Allow-Credentials: "'true'"
@@ -1158,18 +1092,6 @@ Resources:
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecordStreamLambda.Arn}/invocations
       MethodResponses:
         - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 400
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 500
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
@@ -1189,65 +1111,6 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub UploadSongsApi-${Environment}  # Name of the API Gateway
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-
-  # Update GatewayResponse for CORS
-  GatewayResponse:
-    Type: 'AWS::ApiGateway::GatewayResponse'
-    Properties:
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-      ResponseType: DEFAULT_4XX
-      RestApiId: !Ref ApiGateway
-      
-  GatewayResponse5XX:
-    Type: 'AWS::ApiGateway::GatewayResponse'
-    Properties:
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-      ResponseType: DEFAULT_5XX
-      RestApiId: !Ref ApiGateway
-
-  UnauthorizedGatewayResponse:
-    Type: 'AWS::ApiGateway::GatewayResponse'
-    Properties:
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-      ResponseType: UNAUTHORIZED
-      RestApiId: !Ref ApiGateway
-
-  AuthorizerConfigurationErrorResponse:
-    Type: 'AWS::ApiGateway::GatewayResponse'
-    Properties:
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-      ResponseType: AUTHORIZER_CONFIGURATION_ERROR
-      RestApiId: !Ref ApiGateway
-
-  AuthorizerFailureResponse:
-    Type: 'AWS::ApiGateway::GatewayResponse'
-    Properties:
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-      ResponseType: AUTHORIZER_FAILURE
-      RestApiId: !Ref ApiGateway
 
   # API Gateway resource for the upload endpoint
   ApiGatewayResource:
@@ -1276,19 +1139,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 400
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 500
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
               method.response.header.Access-Control-Allow-Credentials: "'true'"
@@ -1299,13 +1150,31 @@ Resources:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 400
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 500
+
+  # Add OPTIONS method for CORS preflight
+  UploadOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref ApiGatewayResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
@@ -1341,20 +1210,8 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 400
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 500
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
               method.response.header.Access-Control-Allow-Credentials: "'true'"
         IntegrationHttpMethod: POST
@@ -1369,18 +1226,6 @@ Resources:
         method.request.querystring.playlist: false
       MethodResponses:
         - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 400
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 500
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
@@ -1414,36 +1259,12 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 400
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Credentials: "'true'"
-          - StatusCode: 500
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
               method.response.header.Access-Control-Allow-Credentials: "'true'"
       MethodResponses:
         - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 400
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Credentials: true
-        - StatusCode: 500
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
@@ -1515,15 +1336,15 @@ Resources:
         CloudWatchMetricsEnabled: true  # Enable CloudWatch metrics
         MetricName: !Sub WebACL-${Environment}  # Metric name
       Rules:
-        - Name: AllowAyauDomain
-          Priority: 0
+        - Name: AllowLocalhostDev
+          Priority: 0  # Highest priority
           Action:
             Allow: {}
           Statement:
             OrStatement:
               Statements:
                 - ByteMatchStatement:
-                    SearchString: 'https://ayau.mindsoftdev.com'
+                    SearchString: 'http://localhost:5173'
                     FieldToMatch:
                       SingleHeader:
                         Name: origin
@@ -1532,7 +1353,7 @@ Resources:
                         Type: NONE
                     PositionalConstraint: EXACTLY
                 - ByteMatchStatement:
-                    SearchString: 'ayau.mindsoftdev.com'
+                    SearchString: 'localhost:5173'
                     FieldToMatch:
                       SingleHeader:
                         Name: origin
@@ -1543,7 +1364,7 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: AllowAyauDomain
+            MetricName: AllowLocalhostDev
 
         # Rate limiting rule to prevent DDoS attacks
         - Name: RateLimitRule
@@ -1690,9 +1511,6 @@ Resources:
       DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref ApiGateway
       StageName: !Ref Environment
-      Variables:
-        # Remove or update the AllowOrigin variable if it conflicts with CORS headers
-        AllowOrigin: '*'
 
   # WAF WebACL association with the API Gateway stage
   WAFWebACLAssociation:
