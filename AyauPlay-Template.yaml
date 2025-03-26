@@ -1642,14 +1642,52 @@ Resources:
     Properties:
       RestApiId: !Ref ApiGateway
 
-  # API Gateway stage configuration
+  # Add CloudWatch role for API Gateway
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  # Add CloudWatch account settings for API Gateway
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
+  # Add CloudWatch Log Group for API Gateway access logs
+  ApiGatewayAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/${Environment}-ayauplay-api
+      RetentionInDays: 7
+
+  # Update API Gateway stage configuration with logging
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
-    DependsOn: ApiGatewayDeployment
+    DependsOn: 
+      - ApiGatewayDeployment
+      - ApiGatewayAccount
     Properties:
       DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref ApiGateway
       StageName: !Ref Environment
+      MethodSettings:
+        - HttpMethod: '*'
+          ResourcePath: '/*'
+          LoggingLevel: ERROR
+          MetricsEnabled: true
+          DataTraceEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
 
   # WAF WebACL association with the API Gateway stage
   # Commenting out this section to disable WAF temporarily
