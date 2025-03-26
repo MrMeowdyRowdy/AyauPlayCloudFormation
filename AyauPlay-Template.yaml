@@ -163,13 +163,6 @@ Resources:
             S3OriginConfig:
               OriginAccessIdentity: ''
             OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
-          - DomainName: !Sub ${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com
-            Id: ApiGatewayOrigin
-            CustomOriginConfig:
-              OriginProtocolPolicy: https-only
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginSSLProtocols: [TLSv1.2]
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
@@ -188,36 +181,6 @@ Resources:
             Cookies:
               Forward: none
           ResponseHeadersPolicyId: !Ref CloudFrontResponseHeadersPolicy
-        CacheBehaviors:
-          - PathPattern: !Sub ${Environment}/*
-            TargetOriginId: ApiGatewayOrigin
-            ViewerProtocolPolicy: https-only
-            AllowedMethods:
-              - DELETE
-              - GET
-              - HEAD
-              - OPTIONS
-              - PATCH
-              - POST
-              - PUT
-            CachedMethods:
-              - GET
-              - HEAD
-              - OPTIONS
-            ForwardedValues:
-              QueryString: true
-              Headers:
-                - Authorization
-                - Accept
-                - Content-Type
-                - Origin
-                - Referer
-              Cookies:
-                Forward: all
-            ResponseHeadersPolicyId: !Ref CloudFrontResponseHeadersPolicy
-            MinTTL: 0
-            DefaultTTL: 0
-            MaxTTL: 0
 
   # Update S3 bucket policy to allow CloudFront access
   SongsBucketPolicy:
@@ -1181,7 +1144,10 @@ Resources:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub UploadSongsApi-${Environment}  # Name of the API Gateway
+      Name: !Sub UploadSongsApi-${Environment}
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
 
   # API Gateway resource for the upload endpoint
   ApiGatewayResource:
