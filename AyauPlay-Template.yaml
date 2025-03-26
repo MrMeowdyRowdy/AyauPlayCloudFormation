@@ -118,6 +118,7 @@ Resources:
       ResponseHeadersPolicyConfig:
         Name: !Sub CORSPolicy-${Environment}
         CorsConfig:
+          AccessControlAllowCredentials: false
           AccessControlAllowHeaders:
             Items:
               - Content-Type
