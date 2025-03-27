@@ -748,7 +748,7 @@ Resources:
           REDSHIFT_DATABASE: ayauplaydb
           REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
           CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
-          PRIVATE_KEY_PARAM: !Sub /cloudfront/${Environment}/private-key
+          PRIVATE_KEY_PARAM: PrivateKeyDistribution
           KEY_PAIR_ID: !Ref CloudFrontKeyPairId
       MemorySize: 512  # Increase memory
       Timeout: 30     # Keep 30 second timeout
