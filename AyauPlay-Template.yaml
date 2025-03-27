@@ -555,6 +555,10 @@ Resources:
           import boto3
           import os
           import logging
+          from datetime import datetime, timedelta
+          from botocore.signers import CloudFrontSigner
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.backends import default_backend
 
           # Set up logging
           logger = logging.getLogger()
@@ -562,6 +566,39 @@ Resources:
 
           # Initialize Redshift Data API client
           redshift_data = boto3.client('redshift-data')
+          ssm = boto3.client('ssm')
+
+          def get_signed_url(s3_key):
+              """Generate signed CloudFront URL for song playback"""
+              try:
+                  distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
+                  url = f"https://{distribution_domain}/{s3_key}"
+                  
+                  # Get private key from SSM
+                  key_param = ssm.get_parameter(
+                      Name=os.environ['PRIVATE_KEY_PARAM'],
+                      WithDecryption=True
+                  )
+                  private_key = serialization.load_pem_private_key(
+                      key_param['Parameter']['Value'].encode('utf-8'),
+                      password=None,
+                      backend=default_backend()
+                  )
+                  
+                  # Configure signer
+                  key_id = os.environ['KEY_PAIR_ID']
+                  expire_date = datetime.utcnow() + timedelta(minutes=5)
+                  signer = CloudFrontSigner(key_id, private_key.sign_msg)
+                  
+                  # Generate URL
+                  signed_url = signer.generate_presigned_url(
+                      url,
+                      date_less_than=expire_date
+                  )
+                  return signed_url
+              except Exception as e:
+                  logger.error(f"Error generating signed URL: {str(e)}")
+                  return None
 
           def get_songs_from_playlist(playlist_id):
               """
@@ -574,7 +611,7 @@ Resources:
               try:
                   # SQL query to join playlist_songs with songs table
                   sql = f"""
-                  SELECT s.title, s.author, s.performer, s.duration
+                  SELECT s.title, s.author, s.performer, s.duration, s.s3_key
                   FROM songs s
                   INNER JOIN playlist_songs ps ON s.song_id = ps.song_id
                   WHERE ps.playlist_id = '{playlist_id}'
@@ -600,13 +637,15 @@ Resources:
                   # Get results
                   results = redshift_data.get_statement_result(Id=response['Id'])
                   
-                  # Format results
+                  # Format results with signed URLs
                   songs = [
                       {
                           "title": record[0]['stringValue'],
                           "author": record[1]['stringValue'],
                           "performer": record[2]['stringValue'],
-                          "duration": int(record[3].get('longValue', 0))
+                          "duration": int(record[3].get('longValue', 0)),
+                          "s3_key": record[4]['stringValue'],
+                          "url": get_signed_url(record[4]['stringValue'])
                       }
                       for record in results.get('Records', [])
                   ]
@@ -672,6 +711,9 @@ Resources:
           REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
           REDSHIFT_DATABASE: ayauplaydb
           REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
+          CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
+          PRIVATE_KEY_PARAM: !Sub /cloudfront/${Environment}/private-key
+          KEY_PAIR_ID: !Ref CloudFrontKeyPairId
       Timeout: 30
 
   # IAM role for the Lambda function
