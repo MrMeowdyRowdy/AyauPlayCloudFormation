@@ -495,8 +495,6 @@ Resources:
           import boto3
           import os
           from botocore.signers import CloudFrontSigner
-          from cryptography.hazmat.primitives import serialization
-          from cryptography.hazmat.backends import default_backend
           from datetime import datetime, timedelta
           import rsa
 
@@ -549,8 +547,6 @@ Resources:
       FunctionName: !Sub RetrieveSongsLambda-${Environment}
       Handler: index.handler
       Role: !GetAtt RetrieveSongsLambdaRole.Arn
-      Layers:
-        - !Ref CryptographyLambdaLayer # Add the Lambda Layer
       Code:
         ZipFile: |
           import json
@@ -559,9 +555,10 @@ Resources:
           import logging
           import traceback
           from datetime import datetime, timedelta
-          from botocore.signers import CloudFrontSigner
-          from cryptography.hazmat.primitives import serialization
-          from cryptography.hazmat.backends import default_backend
+          import urllib.parse
+          import hashlib
+          import hmac
+          import base64
 
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
@@ -573,27 +570,57 @@ Resources:
               try:
                   logger.info(f"Generating signed URL for key: {s3_key}")
                   distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
-                  key_param = ssm.get_parameter(
-                      Name=os.environ['PRIVATE_KEY_PARAM'],
-                      WithDecryption=True
-                  )
+                  key_pair_id = os.environ['KEY_PAIR_ID']
+                  private_key_param = os.environ['PRIVATE_KEY_PARAM']
                   
-                  logger.info("Successfully retrieved private key from SSM")
-                  private_key = serialization.load_pem_private_key(
-                      key_param['Parameter']['Value'].encode('utf-8'),
-                      password=None,
-                      backend=default_backend()
-                  )
+                  # Retrieve private key from SSM Parameter Store
+                  ssm = boto3.client('ssm')
+                  key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
+                  private_key = key_param['Parameter']['Value']
                   
-                  key_id = os.environ['KEY_PAIR_ID']
+                  # Set CloudFront URL
+                  cloudfront_url = f"https://{distribution_domain}/{s3_key}"
+                  
+                  # Set expiration time
                   expire_date = datetime.utcnow() + timedelta(minutes=5)
-                  url = f"https://{distribution_domain}/{s3_key}"
+                  expire_timestamp = int(expire_date.timestamp())
                   
-                  signer = CloudFrontSigner(key_id, private_key.sign_msg)
-                  signed_url = signer.generate_presigned_url(
-                      url,
-                      date_less_than=expire_date
+                  # Create policy statement
+                  policy = {
+                      "Statement": [
+                          {
+                              "Resource": cloudfront_url,
+                              "Condition": {
+                                  "DateLessThan": {
+                                      "AWS:EpochTime": expire_timestamp
+                                  }
+                              }
+                          }
+                      ]
+                  }
+                  
+                  # Convert policy to JSON string
+                  policy_json = json.dumps(policy, separators=(',', ':'))
+                  
+                  # Encode policy
+                  encoded_policy = base64.b64encode(policy_json.encode('utf-8'))
+                  encoded_policy = encoded_policy.decode('utf-8')
+                  
+                  # Sign the encoded policy
+                  signer = hmac.new(
+                      private_key.encode('utf-8'),
+                      encoded_policy.encode('utf-8'),
+                      hashlib.sha1
                   )
+                  signature = signer.digest()
+                  
+                  # Encode signature
+                  encoded_signature = base64.b64encode(signature)
+                  encoded_signature = encoded_signature.decode('utf-8')
+                  
+                  # Create signed URL
+                  signed_url = f"{cloudfront_url}?Expires={expire_timestamp}&Signature={urllib.parse.quote_plus(encoded_signature)}&Key-Pair-Id={key_pair_id}"
+                  
                   logger.info("Successfully generated signed URL")
                   return signed_url
               except Exception as e:
@@ -638,7 +665,7 @@ Resources:
                   songs = []
                   for record in results.get('Records', []):
                       try:
-                          s3_key = record[4]['stringValue'].split('/')[-1]  # Just get filename
+                          s3_key = record[4]['stringValue']
                           url = get_signed_url(s3_key)
                           songs.append({
                               "title": record[0]['stringValue'],
@@ -1810,38 +1837,6 @@ Resources:
   #     WebACLArn: !GetAtt WAFWebACL.Arn
   #   DependsOn:
   #     - ApiGatewayStage
-
-  # Lambda Layer for Cryptography package
-  CryptographyLambdaLayer:
-    Type: AWS::Lambda::LayerVersion
-    Properties:
-      LayerName: !Sub CryptographyLayer-${Environment}
-      Description: Lambda Layer for Cryptography package
-      Content:
-        ZipFile: |
-          import os
-          import subprocess
-          import sys
-
-          def install_package(package):
-              subprocess.check_call([sys.executable, "-m", "pip", "install", package, "-t", "/tmp/python"])
-
-          def create_zip():
-              install_package("cryptography")
-              
-              # Create the zip archive
-              os.chdir('/tmp')
-              subprocess.check_call(['zip', '-r', '/tmp/cryptography-layer.zip', 'python'])
-
-          def handler(event, context):
-              create_zip()
-              return {
-                  'statusCode': 200,
-                  'body': 'Cryptography layer created successfully'
-              }
-      CompatibleRuntimes:
-        - python3.8
-      LicenseInfo: MIT
 
 Conditions:
   IsDev:
