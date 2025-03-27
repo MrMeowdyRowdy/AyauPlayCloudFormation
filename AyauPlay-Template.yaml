@@ -555,240 +555,124 @@ Resources:
           import boto3
           import os
           import logging
-          from datetime import datetime, timedelta
-          from botocore.signers import CloudFrontSigner
-          from cryptography.hazmat.primitives import serialization
-          from cryptography.hazmat.backends import default_backend
 
-          # Initialize clients and logger
-          redshift_data = boto3.client('redshift-data')
-          ssm = boto3.client('ssm')
+          # Set up logging
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
 
-          def get_signed_url(s3_key):
-              """Generate a signed CloudFront URL for the given S3 key"""
+          # Initialize Redshift Data API client
+          redshift_data = boto3.client('redshift-data')
+
+          def get_songs_from_playlist(playlist_id):
+              """
+              Retrieve all songs from a specific playlist
+              Args:
+                  playlist_id (str): ID of the playlist
+              Returns:
+                  list: List of songs with their details
+              """
               try:
-                  # Get CloudFront parameters
-                  distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
-                  key_id = os.environ['KEY_PAIR_ID']
-                  url = f"https://{distribution_domain}/{s3_key}"
-
-                  # Get private key from SSM
-                  key_param = ssm.get_parameter(
-                      Name=os.environ['PRIVATE_KEY_PARAM'],
-                      WithDecryption=True
-                  )
-                  private_key = serialization.load_pem_private_key(
-                      key_param['Parameter']['Value'].encode('utf-8'),
-                      password=None,
-                      backend=default_backend()
-                  )
-
-                  # Configure CloudFront signer
-                  expire_date = datetime.utcnow() + timedelta(minutes=5)
-                  signer = CloudFrontSigner(key_id, private_key.sign_msg)
-                  signed_url = signer.generate_presigned_url(
-                      url,
-                      date_less_than=expire_date
-                  )
-                  
-                  return signed_url
-              except Exception as e:
-                  logger.error(f"Error generating signed URL: {str(e)}")
-                  return None
-
-          def get_playlist_songs(playlist_id, user_id):
-              """Get all songs in a playlist checking user permissions"""
-              try:
-                  # First check if user has permission to access this playlist
-                  permission_check = f"""
-                  SELECT 1 FROM playlist_permissions 
-                  WHERE playlist_id = '{playlist_id}' 
-                  AND user_id = '{user_id}'
-                  """
-                  
-                  check_response = redshift_data.execute_statement(
-                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
-                      Database=os.environ['REDSHIFT_DATABASE'],
-                      DbUser=os.environ['REDSHIFT_DB_USER'],
-                      Sql=permission_check
-                  )
-
-                  # Wait for permission check to complete
-                  while True:
-                      status = redshift_data.describe_statement(Id=check_response['Id'])
-                      if status['Status'] == 'FINISHED':
-                          results = redshift_data.get_statement_result(Id=check_response['Id'])
-                          if not results.get('Records'):
-                              return None  # No permission
-                          break
-                      elif status['Status'] in ['FAILED', 'ABORTED']:
-                          raise Exception("Permission check failed")
-
-                  # Get songs in playlist with duration field
+                  # SQL query to join playlist_songs with songs table
                   sql = f"""
-                  SELECT s.song_id, s.title, s.author, s.performer, s.s3_key, s.duration
+                  SELECT s.title, s.author, s.performer, s.duration
                   FROM songs s
                   INNER JOIN playlist_songs ps ON s.song_id = ps.song_id
                   WHERE ps.playlist_id = '{playlist_id}'
+                  ORDER BY ps.added_at ASC;
                   """
-
+                  
+                  # Execute query
                   response = redshift_data.execute_statement(
                       ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
                       Database=os.environ['REDSHIFT_DATABASE'],
                       DbUser=os.environ['REDSHIFT_DB_USER'],
                       Sql=sql
                   )
-
+                  
                   # Wait for query to complete
                   while True:
                       status = redshift_data.describe_statement(Id=response['Id'])
                       if status['Status'] == 'FINISHED':
                           break
                       elif status['Status'] in ['FAILED', 'ABORTED']:
-                          raise Exception("Query failed")
-
-                  # Get results and generate signed URLs
+                          raise Exception(f"Query failed: {status.get('Error', 'Unknown error')}")
+                  
+                  # Get results
                   results = redshift_data.get_statement_result(Id=response['Id'])
-                  return [
+                  
+                  # Format results
+                  songs = [
                       {
-                          "song_id": record[0]['stringValue'],
-                          "title": record[1]['stringValue'],
-                          "author": record[2]['stringValue'],
-                          "performer": record[3]['stringValue'],
-                          "s3_key": record[4]['stringValue'],
-                          "duration": int(record[5].get('longValue', 0)),
-                          "url": get_signed_url(record[4]['stringValue'])
+                          "title": record[0]['stringValue'],
+                          "author": record[1]['stringValue'],
+                          "performer": record[2]['stringValue'],
+                          "duration": int(record[3].get('longValue', 0))
                       }
                       for record in results.get('Records', [])
                   ]
+                  
+                  return songs
+                  
               except Exception as e:
                   logger.error(f"Database error: {str(e)}")
                   raise
 
           def handler(event, context):
               try:
-                  # Log the incoming event for debugging
-                  logger.info("Received event:")
-                  logger.info(json.dumps(event))
-
-                  # Check if we have authorization context
-                  if 'requestContext' not in event:
-                      logger.error("No requestContext in event")
-                      return {
-                          'statusCode': 401,
-                          'headers': {
-                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
-                          },
-                          'body': json.dumps('Missing authorization context')
-                      }
-
-                  if 'authorizer' not in event['requestContext']:
-                      logger.error("No authorizer in requestContext")
-                      return {
-                          'statusCode': 401,
-                          'headers': {
-                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
-                          },
-                          'body': json.dumps('Missing authorizer context')
-                      }
-
-                  # Log the authorization context
-                  auth_context = event['requestContext']['authorizer']
-                  logger.info("Authorization context:")
-                  logger.info(json.dumps(auth_context))
-
-                  # Extract user information from Cognito claims
-                  claims = auth_context.get('claims', {})
-                  if not claims:
-                      logger.error("No claims in authorizer context")
-                      return {
-                          'statusCode': 401,
-                          'headers': {
-                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
-                          },
-                          'body': json.dumps('Missing Cognito claims')
-                      }
-
-                  user_id = claims.get('sub')
-                  if not user_id:
-                      logger.error("No sub claim found")
-                      return {
-                          'statusCode': 401,
-                          'headers': {
-                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
-                          },
-                          'body': json.dumps('Invalid Cognito token: missing sub claim')
-                      }
-
-                  groups = claims.get('cognito:groups', [])
-                  is_admin = 'admin' in groups
-
+                  # Log incoming request
+                  logger.info(f"Received event: {json.dumps(event)}")
+                  
                   # Get playlist_id from query parameters
-                  playlist_id = event['queryStringParameters'].get('playlist_id')
-                  if not playlist_id:
+                  query_params = event.get('queryStringParameters', {})
+                  if not query_params or 'playlist_id' not in query_params:
                       return {
                           'statusCode': 400,
                           'headers': {
-                              'Access-Control-Allow-Headers': 'Content-Type',
+                              'Content-Type': 'application/json',
                               'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                              'Access-Control-Allow-Methods': 'GET,OPTIONS'
                           },
-                          'body': json.dumps('playlist_id is required')
+                          'body': json.dumps({'error': 'playlist_id is required'})
                       }
-
-                  # If user is admin, skip permission check
-                  if not is_admin:
-                      songs = get_playlist_songs(playlist_id, user_id)
-                      if songs is None:
-                          return {
-                              'statusCode': 403,
-                              'headers': {
-                                  'Access-Control-Allow-Headers': 'Content-Type',
-                                  'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                                  'Access-Control-Allow-Methods': 'OPTIONS,GET'
-                              },
-                              'body': json.dumps('Access denied to this playlist')
-                          }
-                  else:
-                      songs = get_playlist_songs(playlist_id, user_id)
-
+                  
+                  playlist_id = query_params['playlist_id']
+                  
+                  # Get songs from playlist
+                  songs = get_songs_from_playlist(playlist_id)
+                  
+                  # Return response
                   return {
                       'statusCode': 200,
                       'headers': {
-                          'Access-Control-Allow-Headers': 'Content-Type',
+                          'Content-Type': 'application/json',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                          'Access-Control-Allow-Methods': 'GET,OPTIONS'
                       },
-                      'body': json.dumps(songs)
+                      'body': json.dumps({
+                          'playlist_id': playlist_id,
+                          'songs': songs
+                      })
                   }
+                  
               except Exception as e:
-                  logger.error(f"Error in handler: {str(e)}")
+                  logger.error(f"Error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
-                          'Access-Control-Allow-Headers': 'Content-Type',
+                          'Content-Type': 'application/json',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                          'Access-Control-Allow-Methods': 'GET,OPTIONS'
                       },
-                      'body': json.dumps(f'Error: {str(e)}')
+                      'body': json.dumps({'error': str(e)})
                   }
       Runtime: python3.8
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
-          PRIVATE_KEY_PARAM: !Sub /cloudfront/${Environment}/private-key
-          KEY_PAIR_ID: !Ref CloudFrontKeyPairId
+          REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
+          REDSHIFT_DATABASE: ayauplaydb
+          REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
+      Timeout: 30
 
   # IAM role for the Lambda function
   LambdaExecutionRole:
