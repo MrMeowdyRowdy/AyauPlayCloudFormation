@@ -196,9 +196,12 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !GetAtt CloudFrontOriginAccessControl.Arn  # Allow access from CloudFront OAC
+              Service: cloudfront.amazonaws.com  # Allow access from CloudFront
             Action: s3:GetObject
             Resource: !Sub ${SongsBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SongsDistribution.Id}
 
   # Lambda function to handle song uploads
   UploadSongsLambda:
