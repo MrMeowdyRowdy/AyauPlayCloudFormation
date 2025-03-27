@@ -669,9 +669,67 @@ Resources:
 
           def handler(event, context):
               try:
+                  # Log the incoming event for debugging
+                  logger.info("Received event:")
+                  logger.info(json.dumps(event))
+
+                  # Check if we have authorization context
+                  if 'requestContext' not in event:
+                      logger.error("No requestContext in event")
+                      return {
+                          'statusCode': 401,
+                          'headers': {
+                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                          },
+                          'body': json.dumps('Missing authorization context')
+                      }
+
+                  if 'authorizer' not in event['requestContext']:
+                      logger.error("No authorizer in requestContext")
+                      return {
+                          'statusCode': 401,
+                          'headers': {
+                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                          },
+                          'body': json.dumps('Missing authorizer context')
+                      }
+
+                  # Log the authorization context
+                  auth_context = event['requestContext']['authorizer']
+                  logger.info("Authorization context:")
+                  logger.info(json.dumps(auth_context))
+
                   # Extract user information from Cognito claims
-                  claims = event['requestContext']['authorizer']['claims']
-                  user_id = claims['sub']
+                  claims = auth_context.get('claims', {})
+                  if not claims:
+                      logger.error("No claims in authorizer context")
+                      return {
+                          'statusCode': 401,
+                          'headers': {
+                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                          },
+                          'body': json.dumps('Missing Cognito claims')
+                      }
+
+                  user_id = claims.get('sub')
+                  if not user_id:
+                      logger.error("No sub claim found")
+                      return {
+                          'statusCode': 401,
+                          'headers': {
+                              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                          },
+                          'body': json.dumps('Invalid Cognito token: missing sub claim')
+                      }
+
                   groups = claims.get('cognito:groups', [])
                   is_admin = 'admin' in groups
 
