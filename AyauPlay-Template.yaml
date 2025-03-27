@@ -376,91 +376,65 @@ Resources:
 
           def list_playlists(user_id, groups):
               """
-              List available playlists based on user permissions
+              Retrieve playlists from the database based on user permissions.
               Args:
                   user_id (str): Cognito user ID
                   groups (list): List of Cognito groups the user belongs to
               Returns:
-                  dict: List of available playlists
+                  dict: List of playlists with their IDs and names.
               """
-              is_admin = 'admin' in groups
-              if is_admin:
-                  prefix = "playlists/"
-              else:
-                  # Query Redshift for playlists the user has access to
-                  sql = f"""
-                  SELECT playlist_id FROM playlist_permissions WHERE user_id = '{user_id}'
-                  """
+              try:
+                  is_admin = 'admin' in groups
+                  
+                  # Query playlists based on user permissions
+                  if is_admin:
+                      sql = "SELECT playlist_id, name FROM playlists"
+                  else:
+                      sql = f"""
+                      SELECT p.playlist_id, p.name
+                      FROM playlists p
+                      INNER JOIN playlist_permissions pp
+                      ON p.playlist_id = pp.playlist_id
+                      WHERE pp.user_id = '{user_id}'
+                      """
+                  
                   response = redshift_data.execute_statement(
                       ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
                       Database=os.environ['REDSHIFT_DATABASE'],
                       DbUser=os.environ['REDSHIFT_DB_USER'],
                       Sql=sql
                   )
-                  # Safely handle missing 'Records' key
-                  playlist_ids = [
-                      row['playlist_id'] for row in response.get('Records', [])
+                  
+                  # Extract records from the response
+                  records = response.get('Records', [])
+                  playlists = [
+                      {"id": record[0]['stringValue'], "name": record[1]['stringValue']}
+                      for record in records
                   ]
-                  prefix = f"playlists/{user_id}/" if not playlist_ids else f"playlists/({','.join(playlist_ids)})/"
-
-              response = s3.list_objects_v2(Bucket=bucket_name, Delimiter='/', Prefix=prefix)
-              playlists = []
-              
-              for prefix in response.get('CommonPrefixes', []):
-                  playlist_path = prefix.get('Prefix', '').rstrip('/')
-                  playlist_name = playlist_path.split('/')[-1]
-                  playlists.append(playlist_name)
-              
-              return {
-                  "statusCode": 200,
-                  "headers": {
-                      "Access-Control-Allow-Headers": "Content-Type",
-                      "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
-                      "Access-Control-Allow-Methods": "OPTIONS,GET"
-                  },
-                  "body": json.dumps({"playlists": playlists})
-              }
-
-          def get_playlist_songs(user_id, playlist_name, groups):
-              """
-              Get all songs in a playlist with signed URLs
-              Args:
-                  user_id (str): Cognito user ID
-                  playlist_name (str): Name of the playlist
-                  groups (list): List of Cognito groups the user belongs to
-              Returns:
-                  dict: List of songs with signed URLs
-              """
-              is_admin = 'admin' in groups
-              # Determine the prefix based on user permissions
-              prefix = f"playlists/{playlist_name}/" if is_admin else f"playlists/{user_id}/{playlist_name}/"
-              
-              # List all songs in the playlist
-              response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-              songs = []
-              
-              for obj in response.get('Contents', []):
-                  song_key = obj['Key']
-                  if song_key.endswith(('.wav', '.mp3', '.aac')):
-                      signed_url = get_signed_url(song_key)
-                      songs.append({
-                          'name': song_key.split('/')[-1],
-                          'url': signed_url
-                      })
-              
-              return {
-                  "statusCode": 200,
-                  "headers": {
-                      "Access-Control-Allow-Headers": "Content-Type",
-                      "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
-                      "Access-Control-Allow-Methods": "OPTIONS,GET"
-                  },
-                  "body": json.dumps({"songs": songs})
-              }
+                  
+                  return {
+                      "statusCode": 200,
+                      "headers": {
+                          "Access-Control-Allow-Headers": "Content-Type",
+                          "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                          "Access-Control-Allow-Methods": "OPTIONS,GET"
+                      },
+                      "body": json.dumps({"playlists": playlists})
+                  }
+              except Exception as e:
+                  return {
+                      "statusCode": 500,
+                      "headers": {
+                          "Access-Control-Allow-Headers": "Content-Type",
+                          "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                          "Access-Control-Allow-Methods": "OPTIONS,GET"
+                      },
+                      "body": json.dumps(f"Error: {str(e)}")
+                  }
 
           def handler(event, context):
               """
-              Main Lambda handler for playlist operations
+              Main Lambda handler for playlist operations.
               Args:
                   event (dict): API Gateway event
                   context (object): Lambda context
@@ -474,49 +448,29 @@ Resources:
                   groups = claims.get('cognito:groups', [])
 
                   operation = event['httpMethod']
-                  query_params = event.get('queryStringParameters', {}) or {}
                   
                   # Handle GET requests for playlist operations
                   if operation == 'GET':
-                      if 'playlist' in query_params:
-                          return {
-                              'statusCode': 200,
-                              'headers': {
-                                  'Access-Control-Allow-Headers': 'Content-Type',
-                                  'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                                  'Access-Control-Allow-Methods': 'OPTIONS,GET'
-                              },
-                              'body': json.dumps(get_playlist_songs(user_id, query_params['playlist'], groups))
-                          }
-                      else:
-                          return {
-                              'statusCode': 200,
-                              'headers': {
-                                  'Access-Control-Allow-Headers': 'Content-Type',
-                                  'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                                  'Access-Control-Allow-Methods': 'OPTIONS,GET'
-                              },
-                              'body': json.dumps(list_playlists(user_id, groups))
-                          }
+                      return list_playlists(user_id, groups)
                   else:
                       return {
-                          'statusCode': 405,
-                          'headers': {
-                              'Access-Control-Allow-Headers': 'Content-Type',
-                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                          "statusCode": 405,
+                          "headers": {
+                              "Access-Control-Allow-Headers": "Content-Type",
+                              "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                              "Access-Control-Allow-Methods": "OPTIONS,GET"
                           },
-                          'body': json.dumps('Method not allowed')
+                          "body": json.dumps("Method not allowed")
                       }
               except Exception as e:
                   return {
-                      'statusCode': 500,
-                      'headers': {
-                          'Access-Control-Allow-Headers': 'Content-Type',
-                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                      "statusCode": 500,
+                      "headers": {
+                          "Access-Control-Allow-Headers": "Content-Type",
+                          "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                          "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
-                      'body': json.dumps(f'Error: {str(e)}')
+                      "body": json.dumps(f"Error: {str(e)}")
                   }
       Runtime: python3.8
       Environment:
@@ -832,7 +786,7 @@ Resources:
     Type: AWS::Redshift::Cluster
     Properties:
       ClusterIdentifier: !Sub ayauplay-cluster-${Environment}
-      DBName: ayauplaydb
+      DBName: ayauplaydb  # Ensure the database is created with this name
       MasterUsername: !Ref RedshiftMasterUsername
       MasterUserPassword: !Ref RedshiftMasterPassword
       NodeType: dc2.large
