@@ -107,9 +107,9 @@ Resources:
       OriginAccessControlConfig:
         Name: !Sub OAC-songs-${Environment}
         Description: Origin Access Control for Songs Bucket
-        SigningProtocol: sigv4
+        SigningProtocol: sigv4  # Ensure sigv4 is used
         SigningBehavior: always
-        OriginAccessControlOriginType: s3
+        OriginAccessControlOriginType: s3  # Ensure the origin type is S3
 
   # CloudFront response headers policy for CORS
   CloudFrontResponseHeadersPolicy:
