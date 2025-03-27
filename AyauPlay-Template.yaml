@@ -866,7 +866,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloudfront/${Environment}/*
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/PrivateKeyDistribution
               # Add Redshift Data API permissions
               - Effect: Allow
                 Action:
