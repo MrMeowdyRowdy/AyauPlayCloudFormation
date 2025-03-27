@@ -596,24 +596,13 @@ Resources:
                   distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
                   key_pair_id = os.environ['KEY_PAIR_ID']
                   private_key_param = os.environ['PRIVATE_KEY_PARAM']
-                  logger.info(f"private_key_param: {private_key_param}")
                   
-                  # Retrieve private key from SSM Parameter Store
-                  ssm = boto3.client('ssm')
-                  try:
-                      key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
-                      private_key = key_param['Parameter']['Value']
-                      logger.info("Successfully retrieved private key from SSM")
-                  except Exception as e:
-                      logger.error(f"Error retrieving private key: {str(e)}")
-                      logger.error(traceback.format_exc())
-                      return None
-                  
-                  # URL encode the S3 key
-                  encoded_s3_key = urllib.parse.quote_plus(s3_key)
+                  # Extract the object key from the full S3 key (remove "s3://bucket-name/")
+                  object_key = s3_key.split('/', 3)[-1]
+                  logger.info(f"Extracted object key: {object_key}")
                   
                   # Set CloudFront URL
-                  cloudfront_url = f"https://{distribution_domain}/{encoded_s3_key}"
+                  cloudfront_url = f"https://{distribution_domain}/{object_key}"
                   
                   # Set expiration time
                   expire_date = datetime.utcnow() + timedelta(minutes=5)
@@ -640,6 +629,9 @@ Resources:
                   encoded_policy = base64.b64encode(policy_json.encode('utf-8')).decode('utf-8')
                   
                   # Sign the encoded policy
+                  ssm = boto3.client('ssm')
+                  key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
+                  private_key = key_param['Parameter']['Value']
                   signer = hmac.new(
                       private_key.encode('utf-8'),
                       encoded_policy.encode('utf-8'),
