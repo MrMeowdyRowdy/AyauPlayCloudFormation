@@ -554,57 +554,120 @@ Resources:
           import json
           import boto3
           import os
+          import logging
+          from datetime import datetime, timedelta
           from botocore.signers import CloudFrontSigner
           from cryptography.hazmat.primitives import serialization
-          from cryptography.hazmat.backends import default_backend
-          from datetime import datetime, timedelta
+          from cryptography.hazmat.backends: default_backend
 
-          s3 = boto3.client('s3')
-          lambda_client = boto3.client('lambda')
-          bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
+          # Initialize clients and logger
+          redshift_data = boto3.client('redshift-data')
+          ssm = boto3.client('ssm')
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
 
-          def get_signed_url(object_key):
-              """
-              Generate a signed URL for CloudFront access
-              Args:
-                  object_key (str): S3 object key of the song
-              Returns:
-                  str: Signed URL for CloudFront access
-              """
-              distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
-              url = f"https://{distribution_domain}/{object_key}"
-              
-              # Retrieve private key from SSM Parameter Store
-              ssm = boto3.client('ssm')
-              key_param = ssm.get_parameter(Name=os.environ['PRIVATE_KEY_PARAM'], WithDecryption=True)
-              private_key = serialization.load_pem_private_key(
-                  key_param['Parameter']['Value'].encode('utf-8'),
-                  password=None,
-                  backend=default_backend()
-              )
-              
-              # Configure CloudFront signer with key pair ID
-              key_id = os.environ['KEY_PAIR_ID']
-              expire_date = datetime.utcnow() + timedelta(minutes=5)
-              
-              # Generate and return signed URL
-              signer = CloudFrontSigner(key_id, private_key.sign_msg)
-              signed_url = signer.generate_presigned_url(
-                  url,
-                  date_less_than=expire_date
-              )
-              
-              return signed_url
+          def get_signed_url(s3_key):
+              """Generate a signed CloudFront URL for the given S3 key"""
+              try:
+                  # Get CloudFront parameters
+                  distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
+                  key_id = os.environ['KEY_PAIR_ID']
+                  url = f"https://{distribution_domain}/{s3_key}"
+
+                  # Get private key from SSM
+                  key_param = ssm.get_parameter(
+                      Name=os.environ['PRIVATE_KEY_PARAM'],
+                      WithDecryption=True
+                  )
+                  private_key = serialization.load_pem_private_key(
+                      key_param['Parameter']['Value'].encode('utf-8'),
+                      password=None,
+                      backend=default_backend()
+                  )
+
+                  # Configure CloudFront signer
+                  expire_date = datetime.utcnow() + timedelta(minutes=5)
+                  signer = CloudFrontSigner(key_id, private_key.sign_msg)
+                  signed_url = signer.generate_presigned_url(
+                      url,
+                      date_less_than=expire_date
+                  )
+                  
+                  return signed_url
+              except Exception as e:
+                  logger.error(f"Error generating signed URL: {str(e)}")
+                  return None
+
+          def get_playlist_songs(playlist_id, user_id):
+              """Get all songs in a playlist checking user permissions"""
+              try:
+                  # First check if user has permission to access this playlist
+                  permission_check = f"""
+                  SELECT 1 FROM playlist_permissions 
+                  WHERE playlist_id = '{playlist_id}' 
+                  AND user_id = '{user_id}'
+                  """
+                  
+                  check_response = redshift_data.execute_statement(
+                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                      Database=os.environ['REDSHIFT_DATABASE'],
+                      DbUser=os.environ['REDSHIFT_DB_USER'],
+                      Sql=permission_check
+                  )
+
+                  # Wait for permission check to complete
+                  while True:
+                      status = redshift_data.describe_statement(Id=check_response['Id'])
+                      if status['Status'] == 'FINISHED':
+                          results = redshift_data.get_statement_result(Id=check_response['Id'])
+                          if not results.get('Records'):
+                              return None  # No permission
+                          break
+                      elif status['Status'] in ['FAILED', 'ABORTED']:
+                          raise Exception("Permission check failed")
+
+                  # Get songs in playlist with duration field
+                  sql = f"""
+                  SELECT s.song_id, s.title, s.author, s.performer, s.s3_key, s.duration
+                  FROM songs s
+                  INNER JOIN playlist_songs ps ON s.song_id = ps.song_id
+                  WHERE ps.playlist_id = '{playlist_id}'
+                  """
+
+                  response = redshift_data.execute_statement(
+                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                      Database=os.environ['REDSHIFT_DATABASE'],
+                      DbUser=os.environ['REDSHIFT_DB_USER'],
+                      Sql=sql
+                  )
+
+                  # Wait for query to complete
+                  while True:
+                      status = redshift_data.describe_statement(Id=response['Id'])
+                      if status['Status'] == 'FINISHED':
+                          break
+                      elif status['Status'] in ['FAILED', 'ABORTED']:
+                          raise Exception("Query failed")
+
+                  # Get results and generate signed URLs
+                  results = redshift_data.get_statement_result(Id=response['Id'])
+                  return [
+                      {
+                          "song_id": record[0]['stringValue'],
+                          "title": record[1]['stringValue'],
+                          "author": record[2]['stringValue'],
+                          "performer": record[3]['stringValue'],
+                          "s3_key": record[4]['stringValue'],
+                          "duration": int(record[5].get('longValue', 0)),
+                          "url": get_signed_url(record[4]['stringValue'])
+                      }
+                      for record in results.get('Records', [])
+                  ]
+              except Exception as e:
+                  logger.error(f"Database error: {str(e)}")
+                  raise
 
           def handler(event, context):
-              """
-              Main Lambda handler to retrieve all songs in a given playlist
-              Args:
-                  event (dict): API Gateway event
-                  context (object): Lambda context
-              Returns:
-                  dict: API Gateway response
-              """
               try:
                   # Extract user information from Cognito claims
                   claims = event['requestContext']['authorizer']['claims']
@@ -612,52 +675,52 @@ Resources:
                   groups = claims.get('cognito:groups', [])
                   is_admin = 'admin' in groups
 
-                  # Extract playlist ID from request body
-                  body = json.loads(event['body'])
-                  playlist_id = body.get('playlist_id')
+                  # Get playlist_id from query parameters
+                  playlist_id = event['queryStringParameters'].get('playlist_id')
                   if not playlist_id:
                       return {
                           'statusCode': 400,
                           'headers': {
                               'Access-Control-Allow-Headers': 'Content-Type',
                               'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                              'Access-Control-Allow-Methods': 'OPTIONS,GET'
                           },
-                          'body': json.dumps('Playlist ID is required')
+                          'body': json.dumps('playlist_id is required')
                       }
 
-                  # Determine the prefix based on user permissions
-                  prefix = f"playlists/{playlist_id}/" if is_admin else f"playlists/{user_id}/{playlist_id}/"
-                  
-                  # List all songs in the playlist
-                  response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-                  songs = []
-                  
-                  for obj in response.get('Contents', []):
-                      song_key = obj['Key']
-                      if song_key.endswith(('.wav', '.mp3', '.aac')):
-                          signed_url = get_signed_url(song_key)
-                          songs.append({
-                              'name': song_key.split('/')[-1],
-                              'url': signed_url
-                          })
-                  
+                  # If user is admin, skip permission check
+                  if not is_admin:
+                      songs = get_playlist_songs(playlist_id, user_id)
+                      if songs is None:
+                          return {
+                              'statusCode': 403,
+                              'headers': {
+                                  'Access-Control-Allow-Headers': 'Content-Type',
+                                  'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                                  'Access-Control-Allow-Methods': 'OPTIONS,GET'
+                              },
+                              'body': json.dumps('Access denied to this playlist')
+                          }
+                  else:
+                      songs = get_playlist_songs(playlist_id, user_id)
+
                   return {
                       'statusCode': 200,
                       'headers': {
                           'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,GET'
                       },
                       'body': json.dumps(songs)
                   }
               except Exception as e:
+                  logger.error(f"Error in handler: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Headers': 'Content-Type',
                           'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          'Access-Control-Allow-Methods': 'OPTIONS,GET'
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
@@ -1361,7 +1424,7 @@ Resources:
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref ApiGatewayAuthorizer
-      HttpMethod: POST
+      HttpMethod: GET  # Changed from POST to GET
       ResourceId: !Ref RetrieveSongsResource
       RestApiId: !Ref ApiGateway
       Integration:
@@ -1375,7 +1438,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Allow-Methods: "'GET'"
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -1387,6 +1450,7 @@ Resources:
         method.request.header.Origin: false
         method.request.header.Access-Control-Request-Method: false
         method.request.header.Access-Control-Request-Headers: false
+        method.request.querystring.playlist_id: true  # Add playlist_id as required query parameter
 
   # OPTIONS method for the retrieve songs endpoint
   RetrieveSongsOptionsMethod:
@@ -1405,7 +1469,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'*'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin'"
-              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET'"
             SelectionPattern: '200'
       MethodResponses:
         - StatusCode: 200
