@@ -390,6 +390,7 @@ Resources:
                   if is_admin:
                       sql = "SELECT playlist_id, name FROM playlists"
                   else:
+                      # Use the user_id (Cognito sub) to filter playlists
                       sql = f"""
                       SELECT p.playlist_id, p.name
                       FROM playlists p
@@ -419,7 +420,10 @@ Resources:
                           "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
                           "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
-                      "body": json.dumps({"playlists": playlists})
+                      "body": json.dumps({
+                          "user_id": user_id,  # Include user_id for debugging
+                          "playlists": playlists
+                      })
                   }
               except Exception as e:
                   return {
@@ -444,7 +448,7 @@ Resources:
               try:
                   # Extract user information from Cognito claims
                   claims = event['requestContext']['authorizer']['claims']
-                  user_id = claims['sub']
+                  user_id = claims['sub']  # Use the Cognito sub as user_id
                   groups = claims.get('cognito:groups', [])
 
                   operation = event['httpMethod']
@@ -974,9 +978,9 @@ Resources:
                           """
                           INSERT INTO playlist_permissions (permission_id, user_id, playlist_id, granted_at)
                           VALUES 
-                          ('perm1', 'c4489488-e081-7001-f0b1-6184251f36a5', 'playlist1', GETDATE()),
-                          ('perm2', 'c4489488-e081-7001-f0b1-6184251f36a5', 'playlist2', GETDATE()),
-                          ('perm3', 'c4489488-e081-7001-f0b1-6184251f36a5', 'playlist3', GETDATE());
+                          ('perm1', '44f8c428-70b1-7090-4d25-6bcc174b0486', 'playlist1', GETDATE()),
+                          ('perm2', '44f8c428-70b1-7090-4d25-6bcc174b0486', 'playlist2', GETDATE()),
+                          ('perm3', '44f8c428-70b1-7090-4d25-6bcc174b0486', 'playlist3', GETDATE());
                           """
                       ]
                       
