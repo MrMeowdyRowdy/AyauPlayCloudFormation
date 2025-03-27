@@ -572,14 +572,17 @@ Resources:
                   distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
                   key_pair_id = os.environ['KEY_PAIR_ID']
                   private_key_param = os.environ['PRIVATE_KEY_PARAM']
+                  logger.info(f"private_key_param: {private_key_param}")
                   
                   # Retrieve private key from SSM Parameter Store
                   ssm = boto3.client('ssm')
                   try:
                       key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
                       private_key = key_param['Parameter']['Value']
+                      logger.info("Successfully retrieved private key from SSM")
                   except Exception as e:
                       logger.error(f"Error retrieving private key: {str(e)}")
+                      logger.error(traceback.format_exc())
                       return None
                   
                   # Set CloudFront URL
