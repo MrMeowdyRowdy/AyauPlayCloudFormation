@@ -585,8 +585,11 @@ Resources:
                       logger.error(traceback.format_exc())
                       return None
                   
+                  # URL encode the S3 key
+                  encoded_s3_key = urllib.parse.quote_plus(s3_key)
+                  
                   # Set CloudFront URL
-                  cloudfront_url = f"https://{distribution_domain}/{s3_key}"
+                  cloudfront_url = f"https://{distribution_domain}/{encoded_s3_key}"
                   
                   # Set expiration time
                   expire_date = datetime.utcnow() + timedelta(minutes=5)
