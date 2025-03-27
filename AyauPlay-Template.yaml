@@ -721,7 +721,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - redshift-data:ExecuteStatement
-                  - redshift-data:DescribeStatement
+                  - redshift-data:DescribeStatement  # Add this permission
+                  - redshift-data:GetStatementResult
                 Resource: !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
               - Effect: Allow
                 Action:
