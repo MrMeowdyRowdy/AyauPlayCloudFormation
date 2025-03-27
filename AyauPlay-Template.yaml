@@ -168,7 +168,7 @@ Resources:
           ViewerProtocolPolicy: https-only
           TrustedSigners:
             Enabled: true
-            Items:
+            Items:  # Ensure this is a JSON array
               - self  # Ensure the distribution itself is trusted to sign URLs
           AllowedMethods:
             - GET
@@ -628,10 +628,11 @@ Resources:
                   # Encode policy
                   encoded_policy = base64.b64encode(policy_json.encode('utf-8')).decode('utf-8')
                   
-                  # Sign the encoded policy
-                  ssm = boto3.client('ssm')
+                  # Retrieve private key from SSM Parameter Store
                   key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
                   private_key = key_param['Parameter']['Value']
+                  
+                  # Sign the encoded policy
                   signer = hmac.new(
                       private_key.encode('utf-8'),
                       encoded_policy.encode('utf-8'),
