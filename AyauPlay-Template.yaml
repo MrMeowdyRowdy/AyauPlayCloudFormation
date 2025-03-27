@@ -161,8 +161,8 @@ Resources:
           - DomainName: !GetAtt SongsBucket.RegionalDomainName
             Id: S3Origin
             S3OriginConfig:
-              OriginAccessIdentity: ''  # Remove this if using Origin Access Control
-            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id  # Ensure OAC is used
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
@@ -181,10 +181,6 @@ Resources:
             Cookies:
               Forward: none
           ResponseHeadersPolicyId: !Ref CloudFrontResponseHeadersPolicy
-        Logging:
-          Bucket: !Sub ${SongsBucket}.s3.amazonaws.com
-          IncludeCookies: false
-          Prefix: !Sub logs/${Environment}/
 
   # Update S3 bucket policy to allow CloudFront access
   SongsBucketPolicy:
@@ -196,7 +192,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: cloudfront.amazonaws.com  # Allow access from CloudFront
+              Service: cloudfront.amazonaws.com
             Action: s3:GetObject
             Resource: !Sub ${SongsBucket.Arn}/*
             Condition:
@@ -575,7 +571,6 @@ Resources:
                   logger.info(f"Generating signed URL for key: {s3_key}")
                   distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
                   key_pair_id = os.environ['KEY_PAIR_ID']
-                  logger.info(f"key_pair_id: {key_pair_id}")
                   private_key_param = os.environ['PRIVATE_KEY_PARAM']
                   logger.info(f"private_key_param: {private_key_param}")
                   
@@ -610,7 +605,8 @@ Resources:
                                       "AWS:EpochTime": expire_timestamp
                                   }
                               }
-                          ]
+                          }
+                      ]
                   }
                   
                   # Convert policy to JSON string
@@ -630,7 +626,6 @@ Resources:
                   # Encode signature
                   encoded_signature = base64.b64encode(signature).decode('utf-8')
                   
-                  logger.info(f"Generating signed URL with Key-Pair-Id: {key_pair_id}")
                   # Create signed URL
                   signed_url = f"{cloudfront_url}?Expires={expire_timestamp}&Signature={urllib.parse.quote_plus(encoded_signature)}&Key-Pair-Id={key_pair_id}"
                   
