@@ -161,13 +161,15 @@ Resources:
           - DomainName: !GetAtt SongsBucket.RegionalDomainName
             Id: S3Origin
             S3OriginConfig:
-              OriginAccessIdentity: ''
-            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
+              OriginAccessIdentity: ''  # Ensure this is empty as OriginAccessControlId is used
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id  # Ensure this is set
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
           TrustedSigners:
-            - self
+            Enabled: true
+            Items:
+              - self  # Ensure the distribution itself is trusted to sign URLs
           AllowedMethods:
             - GET
             - HEAD
