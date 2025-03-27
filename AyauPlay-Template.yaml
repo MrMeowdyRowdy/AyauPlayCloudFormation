@@ -89,7 +89,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub songs-bucket-${Environment}  # Name of the S3 bucket
-      ObjectOwnership: BucketOwnerPreferred  # Enable ACLs for the bucket
+      AccessControl: LogDeliveryWrite  # Enable ACLs for CloudFront logging
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders: ['*']
