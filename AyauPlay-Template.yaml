@@ -182,10 +182,6 @@ Resources:
             Cookies:
               Forward: none
           ResponseHeadersPolicyId: !Ref CloudFrontResponseHeadersPolicy
-        Logging:
-          Bucket: !Sub ${SongsBucket}.s3.amazonaws.com
-          IncludeCookies: false
-          Prefix: !Sub logs/${Environment}/
 
   # Update S3 bucket policy to allow CloudFront access
   SongsBucketPolicy:
