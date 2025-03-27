@@ -571,6 +571,7 @@ Resources:
                   logger.info(f"Generating signed URL for key: {s3_key}")
                   distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
                   key_pair_id = os.environ['KEY_PAIR_ID']
+                  logger.info(f"key_pair_id: {key_pair_id}")
                   private_key_param = os.environ['PRIVATE_KEY_PARAM']
                   logger.info(f"private_key_param: {private_key_param}")
                   
