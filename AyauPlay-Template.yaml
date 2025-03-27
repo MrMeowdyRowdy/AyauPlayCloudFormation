@@ -161,8 +161,8 @@ Resources:
           - DomainName: !GetAtt SongsBucket.RegionalDomainName
             Id: S3Origin
             S3OriginConfig:
-              OriginAccessIdentity: ''
-            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
+              OriginAccessIdentity: ''  # Remove this if using Origin Access Control
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id  # Ensure OAC is used
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
@@ -181,6 +181,10 @@ Resources:
             Cookies:
               Forward: none
           ResponseHeadersPolicyId: !Ref CloudFrontResponseHeadersPolicy
+        Logging:
+          Bucket: !Sub ${SongsBucket}.s3.amazonaws.com
+          IncludeCookies: false
+          Prefix: !Sub logs/${Environment}/
 
   # Update S3 bucket policy to allow CloudFront access
   SongsBucketPolicy:
@@ -192,12 +196,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: cloudfront.amazonaws.com
+              AWS: !GetAtt CloudFrontOriginAccessControl.Arn  # Allow access from CloudFront OAC
             Action: s3:GetObject
             Resource: !Sub ${SongsBucket.Arn}/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SongsDistribution.Id}
 
   # Lambda function to handle song uploads
   UploadSongsLambda:
@@ -606,8 +607,7 @@ Resources:
                                       "AWS:EpochTime": expire_timestamp
                                   }
                               }
-                          }
-                      ]
+                          ]
                   }
                   
                   # Convert policy to JSON string
@@ -627,6 +627,7 @@ Resources:
                   # Encode signature
                   encoded_signature = base64.b64encode(signature).decode('utf-8')
                   
+                  logger.info(f"Generating signed URL with Key-Pair-Id: {key_pair_id}")
                   # Create signed URL
                   signed_url = f"{cloudfront_url}?Expires={expire_timestamp}&Signature={urllib.parse.quote_plus(encoded_signature)}&Key-Pair-Id={key_pair_id}"
                   
