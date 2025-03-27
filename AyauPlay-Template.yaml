@@ -600,6 +600,14 @@ Resources:
                   logger.error(f"Error generating signed URL: {str(e)}")
                   return None
 
+          def get_object_key_from_s3_uri(s3_uri):
+              """Convert s3://bucket-name/key to just the key"""
+              if s3_uri.startswith('s3://'):
+                  # Remove 's3://' and bucket name to get just the key
+                  parts = s3_uri.split('/', 3)
+                  return parts[3] if len(parts) > 3 else ''
+              return s3_uri  # Already in correct format
+
           def get_songs_from_playlist(playlist_id):
               """
               Retrieve all songs from a specific playlist
@@ -644,8 +652,8 @@ Resources:
                           "author": record[1]['stringValue'],
                           "performer": record[2]['stringValue'],
                           "duration": int(record[3].get('longValue', 0)),
-                          "s3_key": record[4]['stringValue'],
-                          "url": get_signed_url(record[4]['stringValue'])
+                          "s3_key": get_object_key_from_s3_uri(record[4]['stringValue']),
+                          "url": get_signed_url(get_object_key_from_s3_uri(record[4]['stringValue']))
                       }
                       for record in results.get('Records', [])
                   ]
