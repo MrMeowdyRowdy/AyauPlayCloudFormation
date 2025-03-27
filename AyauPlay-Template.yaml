@@ -390,12 +390,12 @@ Resources:
                   if is_admin:
                       sql = "SELECT playlist_id, name FROM playlists"
                   else:
-                      # Use the user_id (Cognito sub) to filter playlists
+                      # Fetch all registries in playlist_permissions for the user_id
                       sql = f"""
-                      SELECT p.playlist_id, p.name
-                      FROM playlists p
-                      INNER JOIN playlist_permissions pp
-                      ON p.playlist_id = pp.playlist_id
+                      SELECT pp.permission_id, pp.user_id, pp.playlist_id, p.name
+                      FROM playlist_permissions pp
+                      INNER JOIN playlists p
+                      ON pp.playlist_id = p.playlist_id
                       WHERE pp.user_id = '{user_id}'
                       """
                   
@@ -409,7 +409,12 @@ Resources:
                   # Extract records from the response
                   records = response.get('Records', [])
                   playlists = [
-                      {"id": record[0]['stringValue'], "name": record[1]['stringValue']}
+                      {
+                          "permission_id": record[0]['stringValue'],
+                          "user_id": record[1]['stringValue'],
+                          "playlist_id": record[2]['stringValue'],
+                          "name": record[3]['stringValue']
+                      }
                       for record in records
                   ]
                   
