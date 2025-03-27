@@ -575,8 +575,12 @@ Resources:
                   
                   # Retrieve private key from SSM Parameter Store
                   ssm = boto3.client('ssm')
-                  key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
-                  private_key = key_param['Parameter']['Value']
+                  try:
+                      key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
+                      private_key = key_param['Parameter']['Value']
+                  except Exception as e:
+                      logger.error(f"Error retrieving private key: {str(e)}")
+                      return None
                   
                   # Set CloudFront URL
                   cloudfront_url = f"https://{distribution_domain}/{s3_key}"
@@ -603,8 +607,7 @@ Resources:
                   policy_json = json.dumps(policy, separators=(',', ':'))
                   
                   # Encode policy
-                  encoded_policy = base64.b64encode(policy_json.encode('utf-8'))
-                  encoded_policy = encoded_policy.decode('utf-8')
+                  encoded_policy = base64.b64encode(policy_json.encode('utf-8')).decode('utf-8')
                   
                   # Sign the encoded policy
                   signer = hmac.new(
@@ -615,8 +618,7 @@ Resources:
                   signature = signer.digest()
                   
                   # Encode signature
-                  encoded_signature = base64.b64encode(signature)
-                  encoded_signature = encoded_signature.decode('utf-8')
+                  encoded_signature = base64.b64encode(signature).decode('utf-8')
                   
                   # Create signed URL
                   signed_url = f"{cloudfront_url}?Expires={expire_timestamp}&Signature={urllib.parse.quote_plus(encoded_signature)}&Key-Pair-Id={key_pair_id}"
