@@ -549,6 +549,8 @@ Resources:
       FunctionName: !Sub RetrieveSongsLambda-${Environment}
       Handler: index.handler
       Role: !GetAtt RetrieveSongsLambdaRole.Arn
+      Layers:
+        - !Ref CryptographyLambdaLayer # Add the Lambda Layer
       Code:
         ZipFile: |
           import json
@@ -1808,6 +1810,38 @@ Resources:
   #     WebACLArn: !GetAtt WAFWebACL.Arn
   #   DependsOn:
   #     - ApiGatewayStage
+
+  # Lambda Layer for Cryptography package
+  CryptographyLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: !Sub CryptographyLayer-${Environment}
+      Description: Lambda Layer for Cryptography package
+      Content:
+        ZipFile: |
+          import os
+          import subprocess
+          import sys
+
+          def install_package(package):
+              subprocess.check_call([sys.executable, "-m", "pip", "install", package, "-t", "/tmp/python"])
+
+          def create_zip():
+              install_package("cryptography")
+              
+              # Create the zip archive
+              os.chdir('/tmp')
+              subprocess.check_call(['zip', '-r', '/tmp/cryptography-layer.zip', 'python'])
+
+          def handler(event, context):
+              create_zip()
+              return {
+                  'statusCode': 200,
+                  'body': 'Cryptography layer created successfully'
+              }
+      CompatibleRuntimes:
+        - python3.8
+      LicenseInfo: MIT
 
 Conditions:
   IsDev:
