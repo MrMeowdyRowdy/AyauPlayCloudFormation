@@ -1328,9 +1328,9 @@ Resources:
   ApiGatewayResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      ParentId: !GetAtt ApiGateway.RootResourceId  # Root resource ID
-      PathPart: upload  # Path part for the resource
-      RestApiId: !Ref ApiGateway  # Reference to the API Gateway
+      ParentId: !GetAtt ApiGateway.RootResourceId  # Ensure this references the root resource
+      PathPart: upload
+      RestApiId: !Ref ApiGateway  # Ensure this references the ApiGateway resource
 
   # API Gateway method for the upload endpoint
   ApiGatewayMethod:
@@ -1397,11 +1397,9 @@ Resources:
   PlaylistResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      # Set this resource as a child of the API's root path
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      # Creates the /playlists path segment
+      ParentId: !GetAtt ApiGateway.RootResourceId  # Ensure this references the root resource
       PathPart: playlists
-      RestApiId: !Ref ApiGateway
+      RestApiId: !Ref ApiGateway  # Ensure this references the ApiGateway resource
 
   # Configures the GET method for the /playlists endpoint
   # This endpoint supports:
@@ -1470,9 +1468,9 @@ Resources:
   RetrieveSongsResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      ParentId: !GetAtt ApiGateway.RootResourceId
+      ParentId: !GetAtt ApiGateway.RootResourceId  # Ensure this references the root resource
       PathPart: retrieve-songs
-      RestApiId: !Ref ApiGateway
+      RestApiId: !Ref ApiGateway  # Ensure this references the ApiGateway resource
 
   # API Gateway method for the retrieve songs endpoint
   RetrieveSongsMethod:
