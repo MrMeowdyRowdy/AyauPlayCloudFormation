@@ -1851,12 +1851,12 @@ Resources:
     Properties:
       DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref ApiGateway
-      StageName: !Ref Environment # Change from ERROR to INFO for detailed logging
+      StageName: !Ref Environment
       MethodSettings:
-        - HttpMethod: '*'  # Enable detailed request/response logging
+        - HttpMethod: '*'
           ResourcePath: '/*'
           LoggingLevel: ERROR
-          MetricsEnabled: trueintegrationError":"$context.integration.error","integrationStatus":"$context.integration.status"}'
+          MetricsEnabled: true  # Corrected to boolean
           DataTraceEnabled: true
       AccessLogSetting:
         DestinationArn: !GetAtt ApiGatewayAccessLogGroup.Arn
