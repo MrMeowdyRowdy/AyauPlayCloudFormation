@@ -316,9 +316,9 @@ Resources:
                   return {
                       'statusCode': 200,
                       'headers': {
-                          'Access-Control-Allow-Headers': 'Content-Type',
-                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
                       'body': json.dumps('File uploaded and song details stored successfully')
                   }
@@ -326,9 +326,9 @@ Resources:
                   return {
                       'statusCode': 500,
                       'headers': {
-                          'Access-Control-Allow-Headers': 'Content-Type',
-                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
@@ -424,8 +424,8 @@ Resources:
                   return {
                       "statusCode": 200,
                       "headers": {
-                          "Access-Control-Allow-Headers": "Content-Type",
-                          "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                           "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
                       "body": json.dumps({
@@ -438,8 +438,8 @@ Resources:
                   return {
                       "statusCode": 500,
                       "headers": {
-                          "Access-Control-Allow-Headers": "Content-Type",
-                          "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                           "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
                       "body": json.dumps(f"Error: {str(e)}")
@@ -467,8 +467,8 @@ Resources:
                   return {
                       "statusCode": 500,
                       "headers": {
-                          "Access-Control-Allow-Headers": "Content-Type",
-                          "Access-Control-Allow-Origin": "https://ayau.mindsoftdev.com",
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                           "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
                       "body": json.dumps(f"Error: {str(e)}")
@@ -723,9 +723,9 @@ Resources:
                   return {
                       'statusCode': 200,
                       'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
                       'body': json.dumps({
                           'playlist_id': playlist_id,
@@ -738,9 +738,9 @@ Resources:
                   return {
                       'statusCode': 500,
                       'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
                       'body': json.dumps({'error': str(e)})
                   }
@@ -1190,9 +1190,9 @@ Resources:
                   return {
                       'statusCode': 200,
                       'headers': {
-                          'Access-Control-Allow-Headers': 'Content-Type',
-                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
                       'body': json.dumps('Stream data recorded successfully')
                   }
@@ -1200,9 +1200,9 @@ Resources:
                   return {
                       'statusCode': 500,
                       'headers': {
-                          'Access-Control-Allow-Headers': 'Content-Type',
-                          'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
-                          'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
