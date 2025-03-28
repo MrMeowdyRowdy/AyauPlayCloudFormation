@@ -1085,7 +1085,7 @@ Resources:
                           """
                           INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, art_location, uploaded_at)
                           VALUES 
-                          ('song1', 'QVAH', 'Alejandro Miño', 'NOSOY', 'QZ5AB2142443', 1161026108, 12319328, , '03Qvah1.1MTLK4416.wav', '', GETDATE()),
+                          ('song1', 'QVAH', 'Alejandro Miño', 'NOSOY', 'QZ5AB2142443', 1161026108, 12319328, 0, '03Qvah1.1MTLK4416.wav', '', GETDATE()),
                           ('song2', 'YANÓ', 'Alejandro Miño', 'NOSOY', 'DGA062238445', 23456, 234567, 0, '02Yanó1.0MTLK 4416.wav', '', GETDATE()),
                           ('song3', 'ZEN', 'Alejandro Miño', 'NOSOY', 'DGA489238945', 2345672, 23456781, 0, '04Zen1.0MTLK4416.wav', '', GETDATE());
                           """,
