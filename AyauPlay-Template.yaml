@@ -197,6 +197,11 @@ Resources:
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SongsDistribution.Id}
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/${CloudFrontOriginAccessControl.Name}
+            Action: s3:GetObject
+            Resource: !Sub ${SongsBucket.Arn}/*
 
   # Lambda function to handle song uploads
   UploadSongsLambda:
