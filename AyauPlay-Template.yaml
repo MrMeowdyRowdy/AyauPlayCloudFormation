@@ -1441,11 +1441,6 @@ Resources:
               method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
               method.response.header.Access-Control-Max-Age: "'7200'"
-            ResponseTemplates:
-              application/json: |
-                {}
-      ResponseModels:
-        application/json: 'Empty'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -1453,8 +1448,6 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Max-Age: true
-          ResponseModels:
-            application/json: 'Empty'
 
   # API Gateway resource for the retrieve songs endpoint
   RetrieveSongsResource:
