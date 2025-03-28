@@ -11,7 +11,7 @@ Parameters:
   CloudFrontKeyPairId:
     Type: String
     Description: The ID of the CloudFront key pair used for signed URLs
-    Default: K3EI3O1Q3O28AD
+    Default: K2P8QBF4IA7GIQ
   RedshiftMasterUsername:
     Type: String
     Description: Master username for Redshift cluster
@@ -104,11 +104,12 @@ Resources:
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
-      Name: !Sub OAC-songs-${Environment}
-      Description: Origin Access Control for Songs Bucket
-      SigningProtocol: sigv4
-      SigningBehavior: always
-      OriginAccessControlOriginType: s3
+      OriginAccessControlConfig:
+        Name: !Sub OAC-songs-${Environment}
+        Description: Origin Access Control for Songs Bucket
+        SigningProtocol: sigv4  # Ensure sigv4 is used
+        SigningBehavior: always
+        OriginAccessControlOriginType: s3  # Ensure the origin type is S3
 
   # CloudFront response headers policy for CORS
   CloudFrontResponseHeadersPolicy:
@@ -165,7 +166,10 @@ Resources:
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
-          TrustedSigners: ['self']  # Changed to array of strings
+          TrustedSigners:
+            Enabled: true
+            Items:
+              - self  # Ensure the distribution itself is trusted to sign URLs
           AllowedMethods:
             - GET
             - HEAD
@@ -196,11 +200,6 @@ Resources:
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SongsDistribution.Id}
-          - Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/${CloudFrontOriginAccessControl.Name}
-            Action: s3:GetObject
-            Resource: !Sub ${SongsBucket.Arn}/*
 
   # Lambda function to handle song uploads
   UploadSongsLambda:
@@ -1409,12 +1408,11 @@ Resources:
   # Configures the GET method for the /playlists endpoint
   # This endpoint supports:
   # - Listing all playlists: GET /playlists
-  # - Getting songs in a playlist: GET /playlists?playlist=<playlist_name>
+  # - Getting songs in a playlist: GET /playlists
   PlaylistGetMethod:
     Type: AWS::ApiGateway::Method
     DependsOn: ApiGatewayAuthorizer
     Properties:
-      # Requires authentication via Cognito User Pools
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref ApiGatewayAuthorizer
       HttpMethod: GET
@@ -1432,15 +1430,11 @@ Resources:
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt PlaylistManagementLambda.Arn
-      # Configures the optional 'playlist' query parameter
-      # When present, it retrieves songs from a specific playlist
-      # When absent, it lists all available playlists
       RequestParameters:
         method.request.header.Authorization: true
         method.request.header.Origin: false
         method.request.header.Access-Control-Request-Method: false
         method.request.header.Access-Control-Request-Headers: false
-        method.request.querystring.playlist: false
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
