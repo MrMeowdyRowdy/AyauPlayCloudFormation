@@ -1355,21 +1355,27 @@ Resources:
       AuthorizationType: NONE
       Integration:
         Type: MOCK
+        PassthroughBehavior: WHEN_NO_MATCH
+        ContentHandling: CONVERT_TO_TEXT
         RequestTemplates:
           application/json: '{"statusCode": 200}'
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
-            SelectionPattern: '200'
+            ContentHandling: CONVERT_TO_TEXT
+            ResponseTemplates:
+              application/json: '{}'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: 'Empty'
 
   # Defines the /playlists resource endpoint in API Gateway
   # This resource handles all playlist-related operations
@@ -1429,11 +1435,9 @@ Resources:
       Integration:
         Type: MOCK
         PassthroughBehavior: WHEN_NO_MATCH
+        ContentHandling: CONVERT_TO_TEXT
         RequestTemplates:
-          application/json: |
-            {
-              "statusCode": 200
-            }
+          application/json: '{"statusCode": 200}'
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
@@ -1441,6 +1445,9 @@ Resources:
               method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
               method.response.header.Access-Control-Max-Age: "'7200'"
+            ContentHandling: CONVERT_TO_TEXT
+            ResponseTemplates:
+              application/json: '{}'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -1448,6 +1455,8 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Max-Age: true
+          ResponseModels:
+            application/json: 'Empty'
 
   # API Gateway resource for the retrieve songs endpoint
   RetrieveSongsResource:
@@ -1502,6 +1511,8 @@ Resources:
       AuthorizationType: NONE
       Integration:
         Type: MOCK
+        PassthroughBehavior: WHEN_NO_MATCH
+        ContentHandling: CONVERT_TO_TEXT
         RequestTemplates:
           application/json: '{"statusCode": 200}'
         IntegrationResponses:
@@ -1510,13 +1521,17 @@ Resources:
               method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-            SelectionPattern: '200'
+            ContentHandling: CONVERT_TO_TEXT
+            ResponseTemplates:
+              application/json: '{}'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: 'Empty'
 
   # OPTIONS method for the record stream endpoint
   RecordStreamOptionsMethod:
@@ -1528,21 +1543,27 @@ Resources:
       AuthorizationType: NONE
       Integration:
         Type: MOCK
+        PassthroughBehavior: WHEN_NO_MATCH
+        ContentHandling: CONVERT_TO_TEXT
         RequestTemplates:
           application/json: '{"statusCode": 200}'
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
-            SelectionPattern: '200'
+            ContentHandling: CONVERT_TO_TEXT
+            ResponseTemplates:
+              application/json: '{}'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: 'Empty'
 
   # Permission for API Gateway to invoke the RetrieveSongsLambda function
   RetrieveSongsLambdaPermission:
