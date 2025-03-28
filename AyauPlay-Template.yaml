@@ -1415,6 +1415,13 @@ Resources:
             {
               "headers": {
                 "Authorization": "$input.params('Authorization')"
+              },
+              "requestContext": {
+                "authorizer": {
+                  "claims": {
+                    "sub": "$context.authorizer.claims.sub"
+                  }
+                }
               }
             }
         IntegrationResponses:
@@ -1427,9 +1434,6 @@ Resources:
               method.response.header.Access-Control-Allow-Methods: "'GET'"
       RequestParameters:
         method.request.header.Authorization: true
-        method.request.header.Origin: false
-        method.request.header.Access-Control-Request-Method: false
-        method.request.header.Access-Control-Request-Headers: false
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
