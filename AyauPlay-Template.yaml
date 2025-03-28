@@ -166,10 +166,7 @@ Resources:
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
-          TrustedSigners:
-            - Enabled: true
-              Items:  # Ensure this is a JSON array
-                - self  # Ensure the distribution itself is trusted to sign URLs
+          TrustedSigners: ['self']  # Changed to array of strings
           AllowedMethods:
             - GET
             - HEAD
