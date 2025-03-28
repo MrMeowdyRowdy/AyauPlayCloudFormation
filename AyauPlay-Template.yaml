@@ -167,9 +167,7 @@ Resources:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
           TrustedSigners:
-            - Enabled: true
-              Items:
-                - self  # Ensure the distribution itself is trusted to sign URLs
+            - self  # Use "self" as a string to indicate the distribution itself is trusted
           AllowedMethods:
             - GET
             - HEAD
