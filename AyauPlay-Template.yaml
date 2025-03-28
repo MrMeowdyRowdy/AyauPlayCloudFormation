@@ -107,9 +107,9 @@ Resources:
       OriginAccessControlConfig:
         Name: !Sub OAC-songs-${Environment}
         Description: Origin Access Control for Songs Bucket
-        SigningProtocol: sigv4  # Ensure sigv4 is used
+        SigningProtocol: sigv4
         SigningBehavior: always
-        OriginAccessControlOriginType: s3  # Ensure the origin type is S3
+        OriginAccessControlOriginType: s3
 
   # CloudFront response headers policy for CORS
   CloudFrontResponseHeadersPolicy:
@@ -161,13 +161,13 @@ Resources:
           - DomainName: !GetAtt SongsBucket.RegionalDomainName
             Id: S3Origin
             S3OriginConfig:
-              OriginAccessIdentity: ''  # Ensure this is empty as OriginAccessControlId is used
-            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id  # Ensure this is set
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
           TrustedSigners:
-            - self  # Use "self" as a string to indicate the distribution itself is trusted
+            - self
           AllowedMethods:
             - GET
             - HEAD
@@ -496,65 +496,43 @@ Resources:
           import os
           from botocore.signers import CloudFrontSigner
           from datetime import datetime, timedelta
-          from cryptography.hazmat.primitives import serialization
-          from cryptography.hazmat.backends import default_backend
-
-          def rsa_signer(message):
-              """
-              Sign a message using the private key.
-              Args:
-                  message (bytes): The message to sign.
-              Returns:
-                  bytes: The signed message.
-              """
-              try:
-                  private_key_path = os.environ['PRIVATE_KEY_PARAM']
-                  ssm = boto3.client('ssm')
-                  key_param = ssm.get_parameter(Name=private_key_path, WithDecryption=True)
-                  private_key = serialization.load_pem_private_key(
-                      key_param['Parameter']['Value'].encode('utf-8'),
-                      password=None,
-                      backend=default_backend()
-                  )
-                  return private_key.sign(message)
-              except Exception as e:
-                  raise Exception(f"Error signing message: {str(e)}")
+          import rsa
 
           def handler(event, context):
               """
-              Generate signed URLs for CloudFront content.
+              Generate signed URLs for CloudFront content
               Args:
-                  event (dict): Lambda event containing object key.
-                  context (object): Lambda context.
+                  event (dict): Lambda event containing object key
+                  context (object): Lambda context
               Returns:
-                  dict: API Gateway response with signed URL.
+                  str: Signed URL for CloudFront access
               """
-              try:
-                  # Get the S3 object key and construct CloudFront URL
-                  object_key = event['object_key']
-                  distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
-                  url = f"https://{distribution_domain}/{object_key}"
-
-                  # Configure CloudFront signer with key pair ID
-                  key_id = os.environ['KEY_PAIR_ID']
-                  expire_date = datetime.utcnow() + timedelta(minutes=5)
-
-                  # Generate signed URL
-                  signer = CloudFrontSigner(key_id, rsa_signer)
-                  signed_url = signer.generate_presigned_url(
-                      url,
-                      date_less_than=expire_date
-                  )
-
-                  return {
-                      'statusCode': 200,
-                      'body': json.dumps({'signed_url': signed_url})
-                  }
-              except Exception as e:
-                  return {
-                      'statusCode': 500,
-                      'body': json.dumps({'error': str(e)})
-                  }
+              # Get the S3 object key and construct CloudFront URL
+              object_key = event['object_key']
+              distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
+              url = f"https://{distribution_domain}/{object_key}"
+              
+              # Retrieve private key from SSM Parameter Store
+              ssm = boto3.client('ssm')
+              key_param = ssm.get_parameter(Name=os.environ['PRIVATE_KEY_PARAM'], WithDecryption=True)
+              private_key = serialization.load_pem_private_key(
+                  key_param['Parameter']['Value'].encode('utf-8'),
+                  password=None,
+                  backend=default_backend()
+              )
+              
+              # Configure CloudFront signer with key pair ID
+              key_id = os.environ['KEY_PAIR_ID']
+              expire_date = datetime.utcnow() + timedelta(minutes=5)
+              
+              # Generate and return signed URL
+              signer = CloudFrontSigner(key_id, private_key.sign_msg)
+              signed_url = signer.generate_presigned_url(
+                  url,
+                  date_less_than=expire_date
+              )
+              
+              return signed_url
       Runtime: python3.8
       Environment:
         Variables:
@@ -593,6 +571,7 @@ Resources:
                   logger.info(f"Generating signed URL for key: {s3_key}")
                   distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
                   key_pair_id = os.environ['KEY_PAIR_ID']
+                  logger.info(f"key_pair_id: {key_pair_id}")
                   private_key_param = os.environ['PRIVATE_KEY_PARAM']
                   logger.info(f"private_key_param: {private_key_param}")
                   
@@ -1418,29 +1397,32 @@ Resources:
       ResourceId: !Ref PlaylistResource
       RestApiId: !Ref ApiGateway
       Integration:
-        IntegrationHttpMethod: POST  # Ensure this matches the Lambda handler's HTTP method
-        Type: AWS_PROXY  # Use AWS_PROXY for direct Lambda integration
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
-          - LambdaArn: !GetAtt PlaylistManagementLambda.Arn  # Reference the correct Lambda function
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET'"
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt PlaylistManagementLambda.Arn
+      # Configures the optional 'playlist' query parameter
+      # When present, it retrieves songs from a specific playlist
+      # When absent, it lists all available playlists
       RequestParameters:
         method.request.header.Authorization: true
         method.request.header.Origin: false
         method.request.header.Access-Control-Request-Method: false
         method.request.header.Access-Control-Request-Headers: false
         method.request.querystring.playlist: false
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
 
   # OPTIONS method for the /playlists endpoint
   PlaylistOptionsMethod:
