@@ -1418,32 +1418,29 @@ Resources:
       ResourceId: !Ref PlaylistResource
       RestApiId: !Ref ApiGateway
       Integration:
+        IntegrationHttpMethod: POST  # Ensure this matches the Lambda handler's HTTP method
+        Type: AWS_PROXY  # Use AWS_PROXY for direct Lambda integration
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt PlaylistManagementLambda.Arn  # Reference the correct Lambda function
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET'"
-        IntegrationHttpMethod: POST
-        Type: AWS_PROXY
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
-          - LambdaArn: !GetAtt PlaylistManagementLambda.Arn
-      # Configures the optional 'playlist' query parameter
-      # When present, it retrieves songs from a specific playlist
-      # When absent, it lists all available playlists
-      RequestParameters:
-        method.request.header.Authorization: true
-        method.request.header.Origin: false
-        method.request.header.Access-Control-Request-Method: false
-        method.request.header.Access-Control-Request-Headers: false
-        method.request.querystring.playlist: false
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
+      RequestParameters:
+        method.request.header.Authorization: true
+        method.request.header.Origin: false
+        method.request.header.Access-Control-Request-Method: false
+        method.request.header.Access-Control-Request-Headers: false
+        method.request.querystring.playlist: false
 
   # OPTIONS method for the /playlists endpoint
   PlaylistOptionsMethod:
