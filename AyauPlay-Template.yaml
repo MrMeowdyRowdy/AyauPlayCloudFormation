@@ -166,8 +166,8 @@ Resources:
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: https-only
-          TrustedSigners:
-            - self
+          TrustedKeyGroups:
+            - !Ref AyauPlayClientsKeyGroup
           AllowedMethods:
             - GET
             - HEAD
@@ -181,6 +181,14 @@ Resources:
             Cookies:
               Forward: none
           ResponseHeadersPolicyId: !Ref CloudFrontResponseHeadersPolicy
+
+  # Add the key group resource for AyauPlay-Clients
+  AyauPlayClientsKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      Name: AyauPlay-Clients
+      Items:
+        - !Ref CloudFrontKeyPairId  # Reference the CloudFront key pair ID
 
   # Update S3 bucket policy to allow CloudFront access
   SongsBucketPolicy:
