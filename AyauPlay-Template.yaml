@@ -580,6 +580,8 @@ Resources:
           CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
           PRIVATE_KEY_PARAM: PrivateKeyDistribution
           KEY_PAIR_ID: !Ref CloudFrontKeyPairId
+      Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:cloudfront:3
 
   # Lambda function to retrieve all songs in a given playlist
   RetrieveSongsLambda:
@@ -735,8 +737,6 @@ Resources:
           SIGNED_URL_LAMBDA: !Ref SignedUrlLambda
       MemorySize: 512
       Timeout: 30
-      Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:cloudfront:3
 
   # IAM role for the Lambda function
   LambdaExecutionRole:
