@@ -732,7 +732,6 @@ Resources:
           REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
           REDSHIFT_DATABASE: ayauplaydb
           REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
-          CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
           KEY_PAIR_ID: !Ref CloudFrontKeyPairId
           SIGNED_URL_LAMBDA: !Ref SignedUrlLambda
       MemorySize: 512
