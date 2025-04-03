@@ -736,7 +736,7 @@ Resources:
       MemorySize: 512
       Timeout: 30
       Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:cloudfront
+      - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:cloudfront:3
 
   # IAM role for the Lambda function
   LambdaExecutionRole:
