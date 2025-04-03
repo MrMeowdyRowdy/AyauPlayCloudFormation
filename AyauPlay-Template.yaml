@@ -269,7 +269,7 @@ Resources:
                   IPI = body['IPI']
                   code = body['code']
                   duration = body.get('duration', 0)
-                  art_location = body.get('art_location', '')
+                  s3_artkey = body.get('s3_artkey', '')
 
                   # Validate file type
                   if not is_valid_audio(file_name):
@@ -303,8 +303,8 @@ Resources:
 
                   # Insert song details into the database
                   sql = f"""
-                  INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, art_location, uploaded_by, uploaded_at)
-                  VALUES ('{uuid.uuid4()}', '{title}', '{author}', '{performer}', '{ISRC}', {IPI}, {code}, {duration}, '{s3_key}', '{art_location}', '{uploaded_by}', GETDATE());
+                  INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, s3_artkey, uploaded_by, uploaded_at)
+                  VALUES ('{uuid.uuid4()}', '{title}', '{author}', '{performer}', '{ISRC}', {IPI}, {code}, {duration}, '{s3_key}', '{s3_artkey}', '{uploaded_by}', GETDATE());
                   """
                   redshift_data.execute_statement(
                       ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
@@ -372,7 +372,7 @@ Resources:
               try:
                   # SQL query to fetch matching registries
                   sql = f"""
-                  SELECT pp.permission_id, pp.user_id, pp.playlist_id, p.name
+                  SELECT pp.permission_id, pp.user_id, pp.playlist_id, p.name, '' AS s3_artkey
                   FROM playlist_permissions pp
                   INNER JOIN playlists p
                   ON pp.playlist_id = p.playlist_id
@@ -414,7 +414,8 @@ Resources:
                           "permission_id": record[0]['stringValue'],
                           "user_id": record[1]['stringValue'],
                           "playlist_id": record[2]['stringValue'],
-                          "name": record[3]['stringValue']
+                          "name": record[3]['stringValue'],
+                          "s3_artkey": record[4]['stringValue']
                       }
                       for record in records
                   ]
@@ -605,7 +606,7 @@ Resources:
           def get_songs_from_playlist(playlist_id):
               try:
                   sql = f"""
-                  SELECT s.title, s.author, s.performer, s.duration, s.s3_key
+                  SELECT s.title, s.author, s.performer, s.duration, s.s3_key, '' AS s3_artkey
                   FROM songs s
                   INNER JOIN playlist_songs ps ON s.song_id = ps.song_id
                   WHERE ps.playlist_id = '{playlist_id}'
@@ -658,8 +659,8 @@ Resources:
                               "author": record[1]['stringValue'],
                               "performer": record[2]['stringValue'],
                               "duration": int(record[3].get('longValue', 0)),
+                              "s3_artkey": record[5]['stringValue'],
                               "s3_key": s3_key,
-                              "s3_artkey": None,
                               "url": url
                           })
                       except Exception as e:
@@ -990,6 +991,7 @@ Resources:
                               playlist_id VARCHAR(255) PRIMARY KEY,
                               name VARCHAR(255) NOT NULL,
                               description VARCHAR(255),
+                              s3_artkey VARCHAR(512),
                               created_at TIMESTAMP DEFAULT GETDATE(),
                               updated_at TIMESTAMP DEFAULT GETDATE()
                           );
@@ -1005,7 +1007,7 @@ Resources:
                               code BIGINT NOT NULL,
                               duration INTEGER,
                               s3_key VARCHAR(512) NOT NULL,
-                              art_location VARCHAR(512),
+                              s3_artkey VARCHAR(512),
                               uploaded_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """,
@@ -1044,11 +1046,11 @@ Resources:
                           """,
                           # Insert sample data for songs
                           """
-                          INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, art_location, uploaded_at)
+                          INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, s3_artkey, uploaded_at)
                           VALUES 
-                          ('song1', 'QVAH', 'Alejandro Miño', 'NOSOY', 'QZ5AB2142443', 1161026108, 12319328, 0, 's3://songs-bucket-dev/03 Qvah 1.1 MTLK 4416.wav', '', GETDATE()),
-                          ('song2', 'YANÓ', 'Alejandro Miño', 'NOSOY', 'DGA062238445', 23456, 234567, 0, 's3://songs-bucket-dev/02 Yanó 1.0 MTLK 4416.wav', '', GETDATE()),
-                          ('song3', 'ZEN', 'Alejandro Miño', 'NOSOY', 'DGA489238945', 2345672, 23456781, 0, 's3://songs-bucket-dev/04 Zen 1.0 MTLK 4416.wav', '', GETDATE());
+                          ('song1', 'QVAH', 'Alejandro Miño', 'NOSOY', 'QZ5AB2142443', 1161026108, 12319328, 0, '03Qvah1.1MTLK4416.wav', '', GETDATE()),
+                          ('song2', 'YANÓ', 'Alejandro Miño', 'NOSOY', 'DGA062238445', 23456, 234567, 0, '02Yanó1.0MTLK4416.wav', '', GETDATE()),
+                          ('song3', 'ZEN', 'Alejandro Miño', 'NOSOY', 'DGA489238945', 2345672, 23456781, 0, '04Zen1.0MTLK4416.wav', '', GETDATE());
                           """,
                           # Insert sample data for playlist_songs
                           """
