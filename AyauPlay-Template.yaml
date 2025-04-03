@@ -332,7 +332,7 @@ Resources:
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
-      Runtime: python3.8  # Runtime environment
+      Runtime: python3.10  # Runtime environment
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
@@ -473,7 +473,7 @@ Resources:
                       },
                       "body": json.dumps(f"Error: {str(e)}")
                   }
-      Runtime: python3.8
+      Runtime: python3.10
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
@@ -492,52 +492,92 @@ Resources:
       Code:
         ZipFile: |
           import json
-          import boto3
           import os
+          import logging
+          import datetime
+          import base64
+          import boto3
+          from cryptography.hazmat.primitives import hashes
+          from cryptography.hazmat.primitives.asymmetric import padding
+          from cryptography.hazmat.primitives.serialization import load_pem_private_key
+          from cryptography.hazmat.backends import default_backend
           from botocore.signers import CloudFrontSigner
-          from datetime import datetime, timedelta
-          import rsa
+          from typing import Tuple, Optional
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
+          key_pair_id = os.environ['KEY_PAIR_ID']
+          expiry_in_hours = 8.0
+
+          ssm = boto3.client('ssm')
+
+          def rsa_signer(message):
+              private_key_param = os.environ['PRIVATE_KEY_PARAM']
+              logger.info(f"private_key_param: {private_key_param}")
+
+              try:
+                key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
+                private_key_pem = key_param['Parameter']['Value'].encode('utf-8')
+                private_key = load_pem_private_key(private_key_pem, password=None, backend=default_backend())
+                logger.info("Successfully retrieved private key from SSM")
+              except Exception as e:
+                logger.error(f"Error retrieving private key: {str(e)}")
+                logger.error(traceback.format_exc())
+                return None
+              
+              signature = private_key.sign(
+                message,
+                padding.PKCS1v15(),
+                hashes.SHA1()
+              )
+
+              return signature
+
+
+          def get_signed_url(cloudfront_url: str) -> Tuple[Optional[str], Optional[int]]:
+
+              cf_signer = CloudFrontSigner(key_pair_id, rsa_signer)
+
+              if cf_signer != None:
+                current_datetime = datetime.datetime.utcnow()
+                less_than = current_datetime + datetime.timedelta(hours=expiry_in_hours)
+                signed_url = cf_signer.generate_presigned_url(cloudfront_url, date_less_than=less_than)
+                return signed_url
+              
+              return None
+
 
           def handler(event, context):
-              """
-              Generate signed URLs for CloudFront content
-              Args:
-                  event (dict): Lambda event containing object key
-                  context (object): Lambda context
-              Returns:
-                  str: Signed URL for CloudFront access
-              """
-              # Get the S3 object key and construct CloudFront URL
+
+              if 'object_key' not in event:
+                return {
+                  'status': 400,
+                  'message': "`object_key` is a required property"
+                }
+
               object_key = event['object_key']
-              distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
-              url = f"https://{distribution_domain}/{object_key}"
-              
-              # Retrieve private key from SSM Parameter Store
-              ssm = boto3.client('ssm')
-              key_param = ssm.get_parameter(Name=os.environ['PRIVATE_KEY_PARAM'], WithDecryption=True)
-              private_key = serialization.load_pem_private_key(
-                  key_param['Parameter']['Value'].encode('utf-8'),
-                  password=None,
-                  backend=default_backend()
-              )
-              
-              # Configure CloudFront signer with key pair ID
-              key_id = os.environ['KEY_PAIR_ID']
-              expire_date = datetime.utcnow() + timedelta(minutes=5)
-              
-              # Generate and return signed URL
-              signer = CloudFrontSigner(key_id, private_key.sign_msg)
-              signed_url = signer.generate_presigned_url(
-                  url,
-                  date_less_than=expire_date
-              )
-              
-              return signed_url
-      Runtime: python3.8
+              cloudfront_url = f"https://{distribution_domain}/{object_key}"
+              signed_url = get_signed_url(cloudfront_url)
+
+              if signed_url == None:
+                return {
+                  'status': 500,
+                  'message': 'Something went wrong'
+                }
+
+              print(f'Signed URL: {signed_url}')
+
+              return {
+                'status': 200,
+                'signed_url': signed_url
+              }
+      Runtime: python3.10
       Environment:
         Variables:
           CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
-          PRIVATE_KEY_PARAM: !Sub /cloudfront/${Environment}/private-key
+          PRIVATE_KEY_PARAM: PrivateKeyDistribution
           KEY_PAIR_ID: !Ref CloudFrontKeyPairId
 
   # Lambda function to retrieve all songs in a given playlist
@@ -554,88 +594,13 @@ Resources:
           import os
           import logging
           import traceback
-          from datetime import datetime, timedelta
-          import urllib.parse
-          import hashlib
-          import hmac
-          import base64
 
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
 
           redshift_data = boto3.client('redshift-data')
           ssm = boto3.client('ssm')
-
-          def get_signed_url(s3_key):
-              try:
-                  logger.info(f"Generating signed URL for key: {s3_key}")
-                  distribution_domain = os.environ['CLOUDFRONT_DOMAIN']
-                  key_pair_id = os.environ['KEY_PAIR_ID']
-                  logger.info(f"key_pair_id: {key_pair_id}")
-                  private_key_param = os.environ['PRIVATE_KEY_PARAM']
-                  logger.info(f"private_key_param: {private_key_param}")
-                  
-                  # Retrieve private key from SSM Parameter Store
-                  ssm = boto3.client('ssm')
-                  try:
-                      key_param = ssm.get_parameter(Name=private_key_param, WithDecryption=True)
-                      private_key = key_param['Parameter']['Value']
-                      logger.info("Successfully retrieved private key from SSM")
-                  except Exception as e:
-                      logger.error(f"Error retrieving private key: {str(e)}")
-                      logger.error(traceback.format_exc())
-                      return None
-                  
-                  # URL encode the S3 key
-                  encoded_s3_key = urllib.parse.quote_plus(s3_key)
-                  
-                  # Set CloudFront URL
-                  cloudfront_url = f"https://{distribution_domain}/{encoded_s3_key}"
-                  
-                  # Set expiration time
-                  expire_date = datetime.utcnow() + timedelta(minutes=5)
-                  expire_timestamp = int(expire_date.timestamp())
-                  
-                  # Create policy statement
-                  policy = {
-                      "Statement": [
-                          {
-                              "Resource": cloudfront_url,
-                              "Condition": {
-                                  "DateLessThan": {
-                                      "AWS:EpochTime": expire_timestamp
-                                  }
-                              }
-                          }
-                      ]
-                  }
-                  
-                  # Convert policy to JSON string
-                  policy_json = json.dumps(policy, separators=(',', ':'))
-                  
-                  # Encode policy
-                  encoded_policy = base64.b64encode(policy_json.encode('utf-8')).decode('utf-8')
-                  
-                  # Sign the encoded policy
-                  signer = hmac.new(
-                      private_key.encode('utf-8'),
-                      encoded_policy.encode('utf-8'),
-                      hashlib.sha1
-                  )
-                  signature = signer.digest()
-                  
-                  # Encode signature
-                  encoded_signature = base64.b64encode(signature).decode('utf-8')
-                  
-                  # Create signed URL
-                  signed_url = f"{cloudfront_url}?Expires={expire_timestamp}&Signature={urllib.parse.quote_plus(encoded_signature)}&Key-Pair-Id={key_pair_id}"
-                  
-                  logger.info("Successfully generated signed URL")
-                  return signed_url
-              except Exception as e:
-                  logger.error(f"Error generating signed URL: {str(e)}")
-                  logger.error(traceback.format_exc())
-                  return None
+          lambda_client = boto3.client('lambda')
 
           def get_songs_from_playlist(playlist_id):
               try:
@@ -675,7 +640,19 @@ Resources:
                   for record in results.get('Records', []):
                       try:
                           s3_key = record[4]['stringValue']
-                          url = get_signed_url(s3_key)
+                          res = lambda_client.invoke(
+                              FunctionName=os.environ['SIGNED_URL_LAMBDA'],
+                              InvocationType='RequestResponse',
+                              Payload=json.dumps({
+                                  'object_key': s3_key
+                              })
+                          )
+                          res_payload = json.loads(res['Payload'].read())
+
+                          url = ''
+                          if res_payload['status'] == 200:
+                              url = res_payload['signed_url']
+
                           songs.append({
                               "title": record[0]['stringValue'],
                               "author": record[1]['stringValue'],
@@ -744,7 +721,7 @@ Resources:
                       },
                       'body': json.dumps({'error': str(e)})
                   }
-      Runtime: python3.8
+      Runtime: python3.10
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
@@ -752,10 +729,12 @@ Resources:
           REDSHIFT_DATABASE: ayauplaydb
           REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
           CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
-          PRIVATE_KEY_PARAM: PrivateKeyDistribution
           KEY_PAIR_ID: !Ref CloudFrontKeyPairId
-      MemorySize: 512  # Increase memory
-      Timeout: 30     # Keep 30 second timeout
+          SIGNED_URL_LAMBDA: !Ref SignedUrlLambda
+      MemorySize: 512
+      Timeout: 30
+      Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:cloudfront
 
   # IAM role for the Lambda function
   LambdaExecutionRole:
@@ -840,7 +819,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloudfront/${Environment}/*
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*
 
   # IAM role for RetrieveSongsLambda
   RetrieveSongsLambdaRole:
@@ -877,6 +856,7 @@ Resources:
                   - redshift-data:ExecuteStatement
                   - redshift-data:DescribeStatement
                   - redshift-data:GetStatementResult
+                  - lambda:InvokeFunction
                 Resource: '*'
               - Effect: Allow
                 Action:
@@ -1101,7 +1081,7 @@ Resources:
                   logger.error(f"Error: {str(e)}")
                   response_data['Error'] = str(e)
                   cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
-      Runtime: python3.8
+      Runtime: python3.10
       Timeout: 300
       Environment:
         Variables:
@@ -1206,7 +1186,7 @@ Resources:
                       },
                       'body': json.dumps(f'Error: {str(e)}')
                   }
-      Runtime: python3.8
+      Runtime: python3.10
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
