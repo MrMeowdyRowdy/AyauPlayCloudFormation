@@ -659,6 +659,7 @@ Resources:
                               "performer": record[2]['stringValue'],
                               "duration": int(record[3].get('longValue', 0)),
                               "s3_key": s3_key,
+                              "s3_artkey": None,
                               "url": url
                           })
                       except Exception as e:
@@ -790,6 +791,7 @@ Resources:
                   - redshift-data:ExecuteStatement
                   - redshift-data:DescribeStatement
                   - redshift-data:GetStatementResult
+                  - lambda:InvokeFunction
                 Resource: '*'  # Modified to use '*' for redshift-data actions
               - Effect: Allow
                 Action:
