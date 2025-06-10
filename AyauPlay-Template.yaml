@@ -878,7 +878,7 @@ Resources:
       MasterUsername: !Ref RedshiftMasterUsername
       MasterUserPassword: !Ref RedshiftMasterPassword
       NodeType: dc2.large
-      NumberOfNodes: 2
+      NumberOfNodes: 1
       ClusterType: multi-node
       PubliclyAccessible: false
       ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
