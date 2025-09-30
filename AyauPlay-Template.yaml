@@ -7,7 +7,7 @@ Parameters:
     AllowedValues:
       - dev
       - prod
-    Default: dev
+    Default: prod
   CloudFrontKeyPairId:
     Type: String
     Description: The ID of the CloudFront key pair used for signed URLs
@@ -266,6 +266,7 @@ Resources:
                   author = body['author']
                   performer = body['performer']
                   ISRC = body['ISRC']
+                  ISWC = body['ISWC']
                   IPI = body['IPI']
                   code = body['code']
                   duration = body.get('duration', 0)
@@ -877,9 +878,9 @@ Resources:
       DBName: ayauplaydb  # Ensure the database is created with this name
       MasterUsername: !Ref RedshiftMasterUsername
       MasterUserPassword: !Ref RedshiftMasterPassword
-      NodeType: dc2.large
+      NodeType: ra3.large
       NumberOfNodes: 1
-      ClusterType: multi-node
+      ClusterType: single-node
       PubliclyAccessible: false
       ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
       VpcSecurityGroupIds: 
