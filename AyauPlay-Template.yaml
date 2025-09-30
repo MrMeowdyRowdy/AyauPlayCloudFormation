@@ -1001,10 +1001,11 @@ Resources:
                               title VARCHAR(255) NOT NULL,
                               author VARCHAR(255) NOT NULL,
                               performer VARCHAR(255) NOT NULL,
-                              ISRC VARCHAR(255) NOT NULL,
-                              IPI BIGINT NOT NULL,
-                              code BIGINT NOT NULL,
-                              duration INTEGER,
+                              ISRC VARCHAR(255),
+                              ISWC VARCHAR(255),
+                              IPI VARCHAR(255),
+                              code VARCHAR(255),
+                              duration VARCHAR(8),
                               s3_key VARCHAR(512) NOT NULL,
                               s3_artkey VARCHAR(512),
                               uploaded_at TIMESTAMP DEFAULT GETDATE()
@@ -1035,38 +1036,6 @@ Resources:
                               granted_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """,
-                          # Insert sample data for playlists
-                          """
-                          INSERT INTO playlists (playlist_id, name, description, created_at, updated_at)
-                          VALUES 
-                          ('playlist1', 'Playlist 1', 'Description for Playlist 1', GETDATE(), GETDATE()),
-                          ('playlist2', 'Playlist 2', 'Description for Playlist 2', GETDATE(), GETDATE()),
-                          ('playlist3', 'Playlist 3', 'Description for Playlist 3', GETDATE(), GETDATE());
-                          """,
-                          # Insert sample data for songs
-                          """
-                          INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, s3_artkey, uploaded_at)
-                          VALUES 
-                          ('song1', 'QVAH', 'Alejandro Miño', 'NOSOY', 'QZ5AB2142443', 1161026108, 12319328, 0, '03Qvah1.1MTLK4416.wav', '', GETDATE()),
-                          ('song2', 'YANÓ', 'Alejandro Miño', 'NOSOY', 'DGA062238445', 23456, 234567, 0, '02Yanó1.0MTLK4416.wav', '', GETDATE()),
-                          ('song3', 'ZEN', 'Alejandro Miño', 'NOSOY', 'DGA489238945', 2345672, 23456781, 0, '04Zen1.0MTLK4416.wav', '', GETDATE());
-                          """,
-                          # Insert sample data for playlist_songs
-                          """
-                          INSERT INTO playlist_songs (playlist_id, song_id, added_at)
-                          VALUES 
-                          ('playlist1', 'song1', GETDATE()),
-                          ('playlist2', 'song2', GETDATE()),
-                          ('playlist3', 'song3', GETDATE());
-                          """,
-                          # Insert permissions for the specified user ID
-                          """
-                          INSERT INTO playlist_permissions (permission_id, user_id, playlist_id, granted_at)
-                          VALUES 
-                          ('perm1', '44f8c428-70b1-7090-4d25-6bcc174b0486', 'playlist1', GETDATE()),
-                          ('perm2', '44f8c428-70b1-7090-4d25-6bcc174b0486', 'playlist2', GETDATE()),
-                          ('perm3', '44f8c428-70b1-7090-4d25-6bcc174b0486', 'playlist3', GETDATE());
-                          """
                       ]
                       
                       # Execute each statement separately
