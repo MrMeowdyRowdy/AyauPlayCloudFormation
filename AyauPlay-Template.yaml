@@ -138,7 +138,7 @@ Resources:
               - DELETE
           AccessControlAllowOrigins:
             Items:
-              - 'https://ayau.mindsoftdev.com'
+              - 'https://ayauplay.ayaumusic.com'
           AccessControlExposeHeaders:
             Items:
               - Content-Type
@@ -278,7 +278,7 @@ Resources:
                           'statusCode': 400,
                           'headers': {
                               'Access-Control-Allow-Headers': 'Content-Type',
-                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Origin': 'https://ayauplay.ayaumusic.com',
                               'Access-Control-Allow-Methods': 'OPTIONS,POST'
                           },
                           'body': json.dumps('Only .wav, .mp3, and .aac files are allowed')
@@ -690,7 +690,7 @@ Resources:
                           'statusCode': 400,
                           'headers': {
                               'Content-Type': 'application/json',
-                              'Access-Control-Allow-Origin': 'https://ayau.mindsoftdev.com',
+                              'Access-Control-Allow-Origin': 'https://ayauplay.ayaumusic.com',
                               'Access-Control-Allow-Methods': 'GET,OPTIONS'
                           },
                           'body': json.dumps({'error': 'playlist_id is required'})
@@ -1219,7 +1219,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST'"
         IntegrationHttpMethod: POST
@@ -1283,7 +1283,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST'"
       MethodResponses:
@@ -1315,7 +1315,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
             ContentHandling: CONVERT_TO_TEXT
@@ -1396,7 +1396,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
               method.response.header.Access-Control-Max-Age: "'7200'"
             ContentHandling: CONVERT_TO_TEXT
             ResponseTemplates:
@@ -1438,7 +1438,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET'"
       MethodResponses:
@@ -1471,7 +1471,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
             ContentHandling: CONVERT_TO_TEXT
@@ -1503,7 +1503,7 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'https://ayau.mindsoftdev.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
             ContentHandling: CONVERT_TO_TEXT
@@ -1591,7 +1591,7 @@ Resources:
             Allow: {}
           Statement:
             ByteMatchStatement:
-              SearchString: 'https://ayau.mindsoftdev.com'
+              SearchString: 'https://ayauplay.ayaumusic.com'
               FieldToMatch:
                 SingleHeader:
                   Name: origin
