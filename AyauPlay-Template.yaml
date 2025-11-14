@@ -661,7 +661,7 @@ Resources:
                               "title": record[0]['stringValue'],
                               "author": record[1]['stringValue'],
                               "performer": record[2]['stringValue'],
-                              "duration": int(record[3].get('longValue', 0)),
+                              "duration": record[3]['stringValue'],
                               "s3_artkey": record[5]['stringValue'],
                               "s3_key": s3_key,
                               "url": url
