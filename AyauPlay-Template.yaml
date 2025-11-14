@@ -662,7 +662,7 @@ Resources:
                               "author": record[1]['stringValue'],
                               "performer": record[2]['stringValue'],
                               "duration": record[3]['stringValue'],
-                              "s3_artkey": record[5]['stringValue'],
+                              "s3_artkey": record[4]['stringValue'],
                               "s3_key": s3_key,
                               "url": url
                           })
