@@ -448,7 +448,14 @@ Resources:
                           logger.error(f"Record data: {record}")
                           continue
           
-                  return records
+                      playlists = [
+                      {
+                          "playlist_id": record[2].get('longValue'),
+                          "name": record[3].get('stringValue'),
+                          "s3_artkey": record[4].get('stringValue') if record[4].get('stringValue') is not None else None
+                      }
+                      for record in records
+                  ]
           
                   logger.info(f"Playlists retrieved: {playlists}")
           
