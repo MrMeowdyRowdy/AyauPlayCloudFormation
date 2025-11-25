@@ -419,6 +419,32 @@ Resources:
                   logger.info(f"Query results: {results}")
           
                   records = results.get('Records', [])
+
+                  for record in records:
+                      try:
+                          s3_key = record[4]['stringValue']
+                          res = lambda_client.invoke(
+                              FunctionName=os.environ['SIGNED_URL_LAMBDA'],
+                              InvocationType='RequestResponse',
+                              Payload=json.dumps({
+                                  'object_key': s3_key
+                              })
+                          )
+                          res_payload = json.loads(res['Payload'].read())
+
+                          url = ''
+                          if res_payload['status'] == 200:
+                              url = res_payload['signed_url']
+
+                          records.append({
+                              "Art_url": url
+                          })
+                      except Exception as e:
+                          logger.error(f"Error processing record: {str(e)}")
+                          logger.error(f"Record data: {record}")
+                          continue
+                  
+                  return records
           
                   playlists = [
                       {
