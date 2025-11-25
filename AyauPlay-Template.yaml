@@ -987,8 +987,9 @@ Resources:
                       # Define table creation SQL statements - execute one at a time
                       sql_statements = [
                           """
-                          CREATE TABLE IF NOT EXISTS playlists (
-                              playlist_id VARCHAR(255) PRIMARY KEY,
+                          DROP TABLE IF EXISTS playlists;
+                          CREATE TABLE playlists (
+                              playlist_id BIGINT IDENTITY(1,1) PRIMARY KEY,
                               name VARCHAR(255) NOT NULL,
                               description VARCHAR(255),
                               s3_artkey VARCHAR(512),
@@ -997,8 +998,9 @@ Resources:
                           );
                           """,
                           """
-                          CREATE TABLE IF NOT EXISTS songs (
-                              song_id VARCHAR(255) PRIMARY KEY,
+                          DROP TABLE IF EXISTS songs;
+                          CREATE TABLE songs (
+                              song_id BIGINT IDENTITY(1,1) PRIMARY KEY,
                               title VARCHAR(255) NOT NULL,
                               author VARCHAR(255) NOT NULL,
                               performer VARCHAR(255) NOT NULL,
@@ -1013,27 +1015,30 @@ Resources:
                           );
                           """,
                           """
-                          CREATE TABLE IF NOT EXISTS playlist_songs (
-                              playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
-                              song_id VARCHAR(255) REFERENCES songs(song_id),
+                          DROP TABLE IF EXISTS playlist_songs;
+                          CREATE TABLE playlist_songs (
+                              playlist_id BIGINT REFERENCES playlists(playlist_id),
+                              song_id BIGINT REFERENCES songs(song_id),
                               added_at TIMESTAMP DEFAULT GETDATE(),
                               PRIMARY KEY (playlist_id, song_id)
                           );
                           """,
                           """
-                          CREATE TABLE IF NOT EXISTS stream_analytics (
-                              stream_id VARCHAR(255) PRIMARY KEY,
-                              song_id VARCHAR(255) REFERENCES songs(song_id),
-                              user_id VARCHAR(255),
+                          DROP TABLE IF EXISTS stream_analytics;
+                          CREATE TABLE stream_analytics (
+                              stream_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+                              song_id BIGINT REFERENCES songs(song_id),
+                              user_id BIGINT,
                               stream_duration INTEGER,
                               streamed_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """,
                           """
-                          CREATE TABLE IF NOT EXISTS playlist_permissions (
-                              permission_id VARCHAR(255) PRIMARY KEY,
+                          DROP TABLE IF EXISTS playlist_permissions;
+                          CREATE TABLE playlist_permissions (
+                              permission_id BIGINT IDENTITY(1,1) PRIMARY KEY,
                               user_id VARCHAR(255),
-                              playlist_id VARCHAR(255) REFERENCES playlists(playlist_id),
+                              playlist_id BIGINT REFERENCES playlists(playlist_id),
                               granted_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """,
