@@ -482,17 +482,17 @@ Resources:
                       })
                   }
 
-    except Exception as e:
-        logger.error(f"Handler error: {str(e)}")
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                "Access-Control-Allow-Methods": "OPTIONS,GET"
-            },
-            "body": json.dumps({"error": str(e)})
-        }
+          except Exception as e:
+              logger.error(f"Handler error: {str(e)}")
+              return {
+                  "statusCode": 500,
+                  "headers": {
+                      "Access-Control-Allow-Origin": "*",
+                      "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                      "Access-Control-Allow-Methods": "OPTIONS,GET"
+                  },
+                  "body": json.dumps({"error": str(e)})
+              }
 
       Runtime: python3.10
       Environment:
