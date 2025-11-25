@@ -448,7 +448,7 @@ Resources:
                           logger.error(f"Record data: {record}")
                           continue
           
-                      playlists = [
+                  playlists = [
                       {
                           "playlist_id": record[2].get('longValue'),
                           "name": record[3].get('stringValue'),
