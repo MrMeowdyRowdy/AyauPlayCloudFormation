@@ -362,78 +362,109 @@ Resources:
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
           
-          def list_user_playlists(user_id):
-              try:
-                  sql = f"""
+          def fetch_query_results(statement_id):
+              while True:
+                  status = redshift_data.describe_statement(Id=statement_id)
+                  if status['Status'] in ['FINISHED', 'FAILED', 'ABORTED']:
+                      if status['Status'] != 'FINISHED':
+                          raise Exception(status.get('Error', 'Unknown Redshift query error'))
+                      break
+                  time.sleep(0.15)
+              return redshift_data.get_statement_result(Id=statement_id)
+          
+          
+          def list_user_playlists(user_id, page, limit):
+              offset = (page - 1) * limit
+          
+              # 1) Get paginated playlist records
+              sql = f"""
                   SELECT pp.permission_id,
                          pp.user_id,
                          pp.playlist_id,
                          p.name,
                          p.s3_artkey
                   FROM playlist_permissions pp
-                  INNER JOIN playlists p
-                  ON pp.playlist_id = p.playlist_id
-                  WHERE pp.user_id = '{user_id}';
-                  """
+                  INNER JOIN playlists p ON pp.playlist_id = p.playlist_id
+                  WHERE pp.user_id = '{user_id}'
+                  ORDER BY p.playlist_id
+                  LIMIT {limit} OFFSET {offset};
+              """
           
-                  logger.info(f"Executing SQL query: {sql}")
+              logger.info(f"Executing playlist query: {sql}")
           
-                  response = redshift_data.execute_statement(
-                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
-                      Database=os.environ['REDSHIFT_DATABASE'],
-                      DbUser=os.environ['REDSHIFT_DB_USER'],
-                      Sql=sql
-                  )
+              response = redshift_data.execute_statement(
+                  ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                  Database=os.environ['REDSHIFT_DATABASE'],
+                  DbUser=os.environ['REDSHIFT_DB_USER'],
+                  Sql=sql
+              )
           
-                  statement_id = response['Id']
-                  logger.info(f"Statement ID: {statement_id}")
+              results = fetch_query_results(response['Id'])
+              records = results.get('Records', [])
           
-                  while True:
-                      status = redshift_data.describe_statement(Id=statement_id)
-                      if status['Status'] in ['FINISHED', 'FAILED', 'ABORTED']:
-                          if status['Status'] != 'FINISHED':
-                              error_message = status.get('Error', 'Unknown error')
-                              logger.error(f"SQL execution failed: {error_message}")
-                              raise Exception(f"SQL execution failed: {error_message}")
-                          break
-                      time.sleep(0.25)
+              playlists = []
+              for record in records:
+                  playlist = {
+                      "permission_id": record[0].get('longValue'),
+                      "user_id": record[1].get('stringValue'),
+                      "playlist_id": record[2].get('longValue'),
+                      "name": record[3].get('stringValue'),
+                      "s3_artkey": record[4].get('stringValue')
+                  }
           
-                  results = redshift_data.get_statement_result(Id=statement_id)
-                  records = results.get('Records', [])
+                  # Sign artwork synchronously only when key exists
+                  if playlist["s3_artkey"]:
+                      try:
+                          res = lambda_client.invoke(
+                              FunctionName=os.environ['SIGNED_URL_LAMBDA'],
+                              InvocationType='RequestResponse',
+                              Payload=json.dumps({
+                                  'object_key': playlist["s3_artkey"]
+                              })
+                          )
           
-                  playlists = []
-                  for record in records:
-                      playlist = {
-                          "permission_id": record[0].get('longValue'),
-                          "user_id": record[1].get('stringValue'),
-                          "playlist_id": record[2].get('longValue'),
-                          "name": record[3].get('stringValue'),
-                          "s3_artkey": record[4].get('stringValue')
-                      }
+                          payload = json.loads(res['Payload'].read())
+                          playlist["art_url"] = payload.get('signed_url') if payload.get('status') == 200 else None
           
-                      # Sign artwork URL if exists
-                      if playlist["s3_artkey"]:
-                          try:
-                              res = lambda_client.invoke(
-                                  FunctionName=os.environ['SIGNED_URL_LAMBDA'],
-                                  InvocationType='RequestResponse',
-                                  Payload=json.dumps({
-                                      'object_key': playlist["s3_artkey"]
-                                  })
-                              )
-                              res_payload = json.loads(res['Payload'].read())
-          
-                              if res_payload.get('status') == 200:
-                                  playlist["art_url"] = res_payload['signed_url']
-                              else:
-                                  playlist["art_url"] = None
-                          except Exception as e:
-                              logger.error(f"Error signing art cover: {str(e)}")
-                              playlist["art_url"] = None
-                      else:
+                      except Exception as e:
+                          logger.error(f"Error signing artwork: {str(e)}")
                           playlist["art_url"] = None
+                  else:
+                      playlist["art_url"] = None
           
-                      playlists.append(playlist)
+                  playlists.append(playlist)
+          
+              # 2) Get total count for pagination
+              count_sql = f"""
+                  SELECT COUNT(*)
+                  FROM playlist_permissions
+                  WHERE user_id = '{user_id}';
+              """
+          
+              count_response = redshift_data.execute_statement(
+                  ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                  Database=os.environ['REDSHIFT_DATABASE'],
+                  DbUser=os.environ['REDSHIFT_DB_USER'],
+                  Sql=count_sql
+              )
+          
+              count_results = fetch_query_results(count_response['Id'])
+              total = count_results['Records'][0][0].get('longValue')
+          
+              return playlists, total
+          
+          
+          def handler(event, context):
+              try:
+                  claims = event['requestContext']['authorizer']['claims']
+                  user_id = claims['sub']
+          
+                  # Pagination parameters
+                  query_params = event.get('queryStringParameters') or {}
+                  page = int(query_params.get('page', 1))
+                  limit = int(query_params.get('limit', 10))
+          
+                  playlists, total = list_user_playlists(user_id, page, limit)
           
                   return {
                       "statusCode": 200,
@@ -444,21 +475,25 @@ Resources:
                       },
                       "body": json.dumps({
                           "user_id": user_id,
+                          "page": page,
+                          "limit": limit,
+                          "total": total,
                           "playlists": playlists
                       })
                   }
-          
-              except Exception as e:
-                  logger.error(f"Error in list_user_playlists: {str(e)}")
-                  return {
-                      "statusCode": 500,
-                      "headers": {
-                          "Access-Control-Allow-Origin": "*",
-                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                          "Access-Control-Allow-Methods": "OPTIONS,GET"
-                      },
-                      "body": json.dumps(f"Error: {str(e)}")
-                  }
+
+    except Exception as e:
+        logger.error(f"Handler error: {str(e)}")
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                "Access-Control-Allow-Methods": "OPTIONS,GET"
+            },
+            "body": json.dumps({"error": str(e)})
+        }
+
       Runtime: python3.10
       Environment:
         Variables:
