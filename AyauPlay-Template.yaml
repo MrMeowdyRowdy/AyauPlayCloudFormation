@@ -1134,8 +1134,8 @@ Resources:
                   user_id = claims['sub']
 
                   sql = f"""
-                  INSERT INTO stream_analytics (stream_id, song_id, user_id, stream_duration, streamed_at)
-                  VALUES ('{uuid.uuid4()}', '{song_id}', '{user_id}', {stream_duration}, GETDATE());
+                  INSERT INTO stream_analytics (song_id, user_id, stream_duration)
+                  VALUES ('{song_id}', '{user_id}', {stream_duration},);
                   """
 
                   response = redshift_data.execute_statement(
