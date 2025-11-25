@@ -420,9 +420,13 @@ Resources:
           
                   records = results.get('Records', [])
 
+                  logger.info("RAW RECORDS BEFORE SIGNING:")
+                  logger.info(json.dumps(records, indent=2))
+                  logger
+
                   for record in records:
                       try:
-                          s3_key = record[4]['stringValue']
+                          s3_key = record[3]['stringValue']
                           res = lambda_client.invoke(
                               FunctionName=os.environ['SIGNED_URL_LAMBDA'],
                               InvocationType='RequestResponse',
@@ -448,7 +452,7 @@ Resources:
                       {
                           "playlist_id": record[2].get('longValue'),
                           "name": record[3].get('stringValue'),
-                          "s3_artkey": record[5].get('stringValue') if record[4].get('stringValue') is not None else None
+                          "s3_artkey": record[4].get('stringValue') if record[4].get('stringValue') is not None else None
                       }
                       for record in records
                   ]
