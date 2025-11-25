@@ -423,10 +423,19 @@ Resources:
                   logger.info("RAW RECORDS BEFORE SIGNING:")
                   logger.info(json.dumps(records, indent=2))
                   logger
+          
+                  playlists = [
+                      {
+                          "playlist_id": record[2].get('longValue'),
+                          "name": record[3].get('stringValue'),
+                          "s3_artkey": record[4].get('stringValue') if record[4].get('stringValue') is not None else None
+                      }
+                      for record in records
+                  ]
 
-                  for record in records:
+                   for record in playlists:
                       try:
-                          s3_key = record[4]['stringValue']
+                          s3_key = record[2]['stringValue']
                           res = lambda_client.invoke(
                               FunctionName=os.environ['SIGNED_URL_LAMBDA'],
                               InvocationType='RequestResponse',
@@ -447,15 +456,6 @@ Resources:
                           logger.error(f"Error processing record: {str(e)}")
                           logger.error(f"Record data: {record}")
                           continue
-          
-                  playlists = [
-                      {
-                          "playlist_id": record[2].get('longValue'),
-                          "name": record[3].get('stringValue'),
-                          "s3_artkey": record[5].get('stringValue') if record[4].get('stringValue') is not None else None
-                      }
-                      for record in records
-                  ]
           
                   logger.info(f"Playlists retrieved: {playlists}")
           
