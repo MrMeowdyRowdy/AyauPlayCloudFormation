@@ -379,7 +379,7 @@ Resources:
                          pp.user_id,
                          pp.playlist_id,
                          p.name,
-                         '' AS s3_artkey
+                         p.s3_artkey
                   FROM playlist_permissions pp
                   INNER JOIN playlists p
                   ON pp.playlist_id = p.playlist_id
@@ -426,7 +426,7 @@ Resources:
                           "user_id": record[1].get('stringValue'),
                           "playlist_id": record[2].get('longValue'),
                           "name": record[3].get('stringValue'),
-                          "s3_artkey": record[4].get('stringValue') if record[4].get('stringValue') is not None else None
+                          "s3_artkey": record[4].get('stringValue')
                       }
                       for record in records
                   ]
