@@ -412,11 +412,12 @@ Resources:
                   records = results.get('Records', [])
                   playlists = [
                       {
-                          "permission_id": record[0]['stringValue'],
-                          "user_id": record[1]['stringValue'],
-                          "playlist_id": record[2]['stringValue'],
-                          "name": record[3]['stringValue'],
-                          "s3_artkey": record[4]['stringValue']
+                        "permission_id": record[0].get('longValue'),
+                        "user_id": record[1].get('stringValue'),
+                        "playlist_id": record[2].get('longValue'),
+                        "name": record[3].get('stringValue'),
+                        "s3_artkey": record[4].get('stringValue') if record[4].get('stringValue') is not None else None
+                            }
                       }
                       for record in records
                   ]
