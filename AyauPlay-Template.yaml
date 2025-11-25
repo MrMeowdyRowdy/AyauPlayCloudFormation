@@ -433,15 +433,15 @@ Resources:
                       for record in records
                   ]
 
-                   for record in playlists:
+                  for record in playlists:
                       try:
                           s3_key = record[2]['stringValue']
                           res = lambda_client.invoke(
-                              FunctionName=os.environ['SIGNED_URL_LAMBDA'],
-                              InvocationType='RequestResponse',
-                              Payload=json.dumps({
-                                  'object_key': s3_key
-                              })
+                             FunctionName=os.environ['SIGNED_URL_LAMBDA'],
+                             InvocationType='RequestResponse',
+                             Payload=json.dumps({
+                                 'object_key': s3_key
+                             })
                           )
                           res_payload = json.loads(res['Payload'].read())
 
