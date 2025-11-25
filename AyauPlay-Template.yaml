@@ -350,221 +350,116 @@ Resources:
       Role: !GetAtt PlaylistLambdaRole.Arn
       Code:
         ZipFile: |
-          import json
+         import json
           import boto3
           import os
           import logging
-          import time
-          
-          redshift_data = boto3.client('redshift-data')
-          lambda_client = boto3.client('lambda')
+          import traceback
           
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
           
-          # safe extractor for Redshift Data API field cells
-          def safe_value(cell):
-              if not isinstance(cell, dict):
-                  return None
-              if cell.get("isNull", False):
-                  return None
-              if "stringValue" in cell:
-                  return cell["stringValue"]
-              if "longValue" in cell:
-                  return cell["longValue"]
-              if "doubleValue" in cell:
-                  return cell["doubleValue"]
-              if "booleanValue" in cell:
-                  return cell["booleanValue"]
-              return None
+          redshift_data = boto3.client('redshift-data')
+          lambda_client = boto3.client('lambda')
           
-          def fetch_query_results(statement_id, poll_delay=0.15):
-              """
-              Wait for a Redshift Data API statement to finish and return get_statement_result.
-              """
-              while True:
-                  status = redshift_data.describe_statement(Id=statement_id)
-                  st = status.get("Status")
-                  if st in ("FINISHED", "FAILED", "ABORTED"):
-                      if st != "FINISHED":
-                          err = status.get("Error", "Unknown Redshift error")
-                          raise Exception(f"Redshift query failed: {err}")
-                      break
-                  time.sleep(poll_delay)
-              return redshift_data.get_statement_result(Id=statement_id)
+          def fetch_playlists(page, per_page):
+              offset = (page - 1) * per_page
           
-          def list_user_playlists(user_id, page=1, page_size=10):
-              """
-              Returns (playlists_list, total_count)
-              """
-              if page < 1:
-                  page = 1
-              # enforce sane bounds for page_size
-              max_page_size = 50
-              if page_size < 1:
-                  page_size = 10
-              if page_size > max_page_size:
-                  page_size = max_page_size
-          
-              offset = (page - 1) * page_size
-          
-              # 1) Paginated query - user_id passed as parameter to avoid SQL injection.
-              # Note: LIMIT/OFFSET are safe because they are ints validated above.
               sql = f"""
-                  SELECT pp.permission_id,
-                         pp.user_id,
-                         pp.playlist_id,
-                         p.name,
-                         p.s3_artkey
-                  FROM playlist_permissions pp
-                  INNER JOIN playlists p ON pp.playlist_id = p.playlist_id
-                  WHERE pp.user_id = :uid
-                  ORDER BY p.playlist_id
-                  LIMIT {page_size} OFFSET {offset};
+                  SELECT playlist_id, name, description, s3_artkey
+                  FROM playlists
+                  ORDER BY created_at DESC
+                  LIMIT {per_page}
+                  OFFSET {offset};
               """
           
-              logger.info("Executing paginated playlists query")
+              logger.info(f"Executing SQL: {sql}")
+          
               response = redshift_data.execute_statement(
                   ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
                   Database=os.environ['REDSHIFT_DATABASE'],
                   DbUser=os.environ['REDSHIFT_DB_USER'],
-                  Sql=sql,
-                  Parameters=[{"name": "uid", "value": {"stringValue": user_id}}]
+                  Sql=sql
               )
           
-              results = fetch_query_results(response["Id"])
-              records = results.get("Records", [])
+              statement_id = response['Id']
+              
+              while True:
+                  status = redshift_data.describe_statement(Id=statement_id)
+                  if status['Status'] == 'FINISHED':
+                      break
+                  elif status['Status'] in ['FAILED', 'ABORTED']:
+                      raise Exception(status.get('Error', 'Unknown error'))
+          
+              results = redshift_data.get_statement_result(Id=statement_id)
           
               playlists = []
-              for record in records:
-                  # defensive access - record should be a list of cells
+              for record in results.get('Records', []):
                   try:
-                      permission_id = safe_value(record[0])  # likely longValue
-                      user_id_cell = safe_value(record[1])
-                      playlist_id = safe_value(record[2])
-                      name = safe_value(record[3])
-                      s3_artkey = safe_value(record[4])
-                  except Exception as e:
-                      logger.error("Error decoding record fields: %s", str(e))
-                      continue
+                      s3_artkey = record[3]['stringValue']
           
-                  # convert numeric IDs to strings to be safe for JSON/JS on client
-                  if permission_id is not None:
-                      permission_id = str(permission_id)
-                  if playlist_id is not None:
-                      playlist_id = str(playlist_id)
-          
-                  playlist = {
-                      "permission_id": permission_id,
-                      "user_id": user_id_cell,
-                      "playlist_id": playlist_id,
-                      "name": name,
-                      "s3_artkey": s3_artkey,
-                      "art_url": None
-                  }
-          
-                  # 2) Synchronously sign artwork only if s3_artkey exists
-                  if s3_artkey:
-                      try:
-                          invoke_payload = {"object_key": s3_artkey}
+                      signed_url = ""
+                      if s3_artkey and len(s3_artkey) > 0:
                           res = lambda_client.invoke(
                               FunctionName=os.environ['SIGNED_URL_LAMBDA'],
                               InvocationType='RequestResponse',
-                              Payload=json.dumps(invoke_payload)
+                              Payload=json.dumps({ 'object_key': s3_artkey })
                           )
-                          payload_bytes = res.get("Payload").read()
-                          payload = json.loads(payload_bytes) if payload_bytes else {}
-                          if payload.get("status") == 200 and payload.get("signed_url"):
-                              playlist["art_url"] = payload.get("signed_url")
-                          else:
-                              playlist["art_url"] = None
-                      except Exception as e:
-                          logger.error("Signing lambda invoke error for key %s : %s", s3_artkey, str(e))
-                          playlist["art_url"] = None
           
-                  playlists.append(playlist)
+                          res_payload = json.loads(res['Payload'].read())
+                          if res_payload.get('status') == 200:
+                              signed_url = res_payload.get('signed_url', '')
           
-              # 3) get total count (for frontend pagination)
-              count_sql = "SELECT COUNT(*) FROM playlist_permissions WHERE user_id = :uid;"
-              count_resp = redshift_data.execute_statement(
-                  ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
-                  Database=os.environ['REDSHIFT_DATABASE'],
-                  DbUser=os.environ['REDSHIFT_DB_USER'],
-                  Sql=count_sql,
-                  Parameters=[{"name": "uid", "value": {"stringValue": user_id}}]
-              )
-              count_results = fetch_query_results(count_resp["Id"])
-              total_cell = count_results.get("Records", [[{}]])[0][0]
-              total = safe_value(total_cell) or 0
-              # ensure integer for client
-              try:
-                  total = int(total)
-              except Exception:
-                  total = 0
+                      playlists.append({
+                          "playlist_id": record[0]['stringValue'],
+                          "name": record[1]['stringValue'],
+                          "description": record[2]['stringValue'],
+                          "s3_artkey": s3_artkey,
+                          "artwork_url": signed_url
+                      })
           
-              return playlists, total
+                  except Exception as e:
+                      logger.error(f"Error processing record: {str(e)}")
+                      continue
+          
+              return playlists
+          
           
           def handler(event, context):
-              """
-              Lambda handler (entrypoint)
-              """
               try:
-                  # Authenticated user from Cognito authorizer
-                  claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-                  user_sub = claims.get("sub")
-                  if not user_sub:
-                      return {
-                          "statusCode": 401,
-                          "headers": {
-                              "Access-Control-Allow-Origin": "*",
-                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                              "Access-Control-Allow-Methods": "OPTIONS,GET"
-                          },
-                          "body": json.dumps({"error": "Unauthorized"})
-                      }
+                  logger.info(f"Received event: {json.dumps(event)}")
           
-                  # pagination params from query string
-                  query_params = event.get("queryStringParameters") or {}
-                  try:
-                      page = int(query_params.get("page", 1))
-                  except Exception:
-                      page = 1
-                  try:
-                      page_size = int(query_params.get("page_size", 10))
-                  except Exception:
-                      page_size = 10
+                  query_params = event.get('queryStringParameters', {}) or {}
           
-                  playlists, total = list_user_playlists(user_sub, page, page_size)
+                  page = int(query_params.get('page', 1))
+                  per_page = int(query_params.get('per_page', 20))
           
-                  body = {
-                      "user_id": user_sub,
-                      "page": page,
-                      "page_size": page_size,
-                      "total": total,
-                      "playlists": playlists
-                  }
+                  playlists = fetch_playlists(page, per_page)
           
                   return {
-                      "statusCode": 200,
-                      "headers": {
+                      'statusCode': 200,
+                      'headers': {
                           "Access-Control-Allow-Origin": "*",
-                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Headers": "Content-Type",
                           "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
-                      "body": json.dumps(body)
+                      'body': json.dumps({
+                          "page": page,
+                          "per_page": per_page,
+                          "playlists": playlists
+                      })
                   }
           
               except Exception as e:
-                  logger.exception("Unhandled handler error")
+                  logger.error(traceback.format_exc())
                   return {
-                      "statusCode": 500,
-                      "headers": {
-                          "Access-Control-Allow-Origin": "*",
-                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                          "Access-Control-Allow-Methods": "OPTIONS,GET"
+                      'statusCode': 500,
+                      'headers': {
+                          "Access-Control-Allow-Origin": "*"
                       },
-                      "body": json.dumps({"error": str(e)})
+                      'body': json.dumps({ "error": str(e) })
                   }
+
       Runtime: python3.10
       Environment:
         Variables:
