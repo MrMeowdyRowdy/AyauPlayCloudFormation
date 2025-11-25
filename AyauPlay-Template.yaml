@@ -369,7 +369,7 @@ Resources:
                          pp.user_id,
                          pp.playlist_id,
                          p.name,
-                         COALESCE(p.s3_artkey, '') AS s3_artkey
+                         p.s3_artkey
                   FROM playlist_permissions pp
                   INNER JOIN playlists p
                   ON pp.playlist_id = p.playlist_id
