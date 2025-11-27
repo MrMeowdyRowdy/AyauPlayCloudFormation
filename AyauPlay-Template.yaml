@@ -627,7 +627,7 @@ Resources:
       Layers:
       - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:layer:cloudfront:3
 
-  # Lambda function to retrieve all songs in a given playlist
+  # Lambda function to retrieve all songs in a given playlist (metadata only)
   RetrieveSongsLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -646,13 +646,11 @@ Resources:
           logger.setLevel(logging.INFO)
 
           redshift_data = boto3.client('redshift-data')
-          ssm = boto3.client('ssm')
-          lambda_client = boto3.client('lambda')
 
           def get_songs_from_playlist(playlist_id):
               try:
                   sql = f"""
-                  SELECT s.title, s.author, s.performer, s.duration, s.s3_key, '' AS s3_artkey
+                  SELECT s.song_id, s.title, s.author, s.performer, s.duration
                   FROM songs s
                   INNER JOIN playlist_songs ps ON s.song_id = ps.song_id
                   WHERE ps.playlist_id = '{playlist_id}'
@@ -686,28 +684,12 @@ Resources:
                   songs = []
                   for record in results.get('Records', []):
                       try:
-                          s3_key = record[4]['stringValue']
-                          res = lambda_client.invoke(
-                              FunctionName=os.environ['SIGNED_URL_LAMBDA'],
-                              InvocationType='RequestResponse',
-                              Payload=json.dumps({
-                                  'object_key': s3_key
-                              })
-                          )
-                          res_payload = json.loads(res['Payload'].read())
-
-                          url = ''
-                          if res_payload['status'] == 200:
-                              url = res_payload['signed_url']
-
                           songs.append({
-                              "title": record[0]['stringValue'],
-                              "author": record[1]['stringValue'],
-                              "performer": record[2]['stringValue'],
-                              "duration": record[3]['stringValue'],
-                              "s3_artkey": record[4]['stringValue'],
-                              "s3_key": s3_key,
-                              "url": url
+                              "song_id": record[0]['stringValue'],
+                              "title": record[1]['stringValue'],
+                              "author": record[2]['stringValue'],
+                              "performer": record[3]['stringValue'],
+                              "duration": record[4]['stringValue']
                           })
                       except Exception as e:
                           logger.error(f"Error processing record: {str(e)}")
@@ -776,8 +758,164 @@ Resources:
           REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
           REDSHIFT_DATABASE: ayauplaydb
           REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
-          KEY_PAIR_ID: !Ref CloudFrontKeyPairId
+      MemorySize: 512
+      Timeout: 30
+
+  # Lambda function to retrieve a single song and generate its signed URL
+  RetrieveSongUrlLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub RetrieveSongUrlLambda-${Environment}
+      Handler: index.handler
+      Role: !GetAtt RetrieveSongUrlLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import logging
+          import traceback
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          redshift_data = boto3.client('redshift-data')
+          lambda_client = boto3.client('lambda')
+
+          def get_song(song_id):
+              try:
+                  sql = f"""
+                  SELECT s.song_id, s.title, s.author, s.performer, s.duration, s.s3_key, s.s3_artkey
+                  FROM songs s
+                  WHERE s.song_id = '{song_id}'
+                  LIMIT 1;
+                  """
+
+                  logger.info(f"Executing SQL: {sql}")
+                  response = redshift_data.execute_statement(
+                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                      Database=os.environ['REDSHIFT_DATABASE'],
+                      DbUser=os.environ['REDSHIFT_DB_USER'],
+                      Sql=sql
+                  )
+
+                  statement_id = response['Id']
+                  logger.info(f"Got statement ID: {statement_id}")
+
+                  while True:
+                      status = redshift_data.describe_statement(Id=statement_id)
+                      logger.info(f"Statement status: {status}")
+                      if status['Status'] == 'FINISHED':
+                          break
+                      elif status['Status'] in ['FAILED', 'ABORTED']:
+                          error = status.get('Error', 'Unknown error')
+                          logger.error(f"Query failed: {error}")
+                          raise Exception(f"Query failed: {error}")
+
+                  results = redshift_data.get_statement_result(Id=statement_id)
+                  logger.info(f"Got results: {json.dumps(results)}")
+
+                  records = results.get('Records', [])
+                  if not records:
+                      return None
+
+                  record = records[0]
+                  song_id = record[0].get('stringValue')
+                  s3_key = record[5].get('stringValue')
+                  art_key = record[6].get('stringValue')
+
+                  url = ''
+                  if s3_key:
+                      res = lambda_client.invoke(
+                          FunctionName=os.environ['SIGNED_URL_LAMBDA'],
+                          InvocationType='RequestResponse',
+                          Payload=json.dumps({'object_key': s3_key})
+                      )
+                      res_payload = json.loads(res['Payload'].read())
+
+                      if res_payload.get('status') == 200:
+                          url = res_payload.get('signed_url', '')
+
+                  artwork_url = ''
+                  cloudfront_domain = os.environ.get('CLOUDFRONT_DOMAIN')
+                  if cloudfront_domain and art_key:
+                      artwork_url = f"https://{cloudfront_domain}/{art_key}"
+
+                  return {
+                      "song_id": song_id,
+                      "title": record[1]['stringValue'],
+                      "author": record[2]['stringValue'],
+                      "performer": record[3]['stringValue'],
+                      "duration": record[4]['stringValue'],
+                      "url": url,
+                      "artwork_url": artwork_url
+                  }
+
+              except Exception as e:
+                  logger.error(f"Database error: {str(e)}")
+                  logger.error(traceback.format_exc())
+                  raise
+
+          def handler(event, context):
+              try:
+                  logger.info(f"Received event: {json.dumps(event)}")
+
+                  query_params = event.get('queryStringParameters', {})
+                  if not query_params or 'song_id' not in query_params:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': 'https://ayauplay.ayaumusic.com',
+                              'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                          },
+                          'body': json.dumps({'error': 'song_id is required'})
+                      }
+
+                  song_id = query_params['song_id']
+                  song = get_song(song_id)
+
+                  if song is None:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,GET"
+                          },
+                          'body': json.dumps({'error': 'Song not found'})
+                      }
+
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,GET"
+                      },
+                      'body': json.dumps(song)
+                  }
+
+              except Exception as e:
+                  logger.error(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          "Access-Control-Allow-Origin": "*",
+                          "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                          "Access-Control-Allow-Methods": "OPTIONS,GET"
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Runtime: python3.10
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          REDSHIFT_CLUSTER_ID: !Sub ayauplay-cluster-${Environment}
+          REDSHIFT_DATABASE: ayauplaydb
+          REDSHIFT_DB_USER: !Ref RedshiftMasterUsername
           SIGNED_URL_LAMBDA: !Ref SignedUrlLambda
+          CLOUDFRONT_DOMAIN: !GetAtt SongsDistribution.DomainName
       MemorySize: 512
       Timeout: 30
 
@@ -908,6 +1046,39 @@ Resources:
                 Action:
                   - redshift:GetClusterCredentials
                 Resource: 
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbuser:${RedshiftCluster}/*
+                  - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbname:${RedshiftCluster}/*
+
+  # IAM role for RetrieveSongUrlLambda
+  RetrieveSongUrlLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RetrieveSongUrlPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - redshift-data:ExecuteStatement
+                  - redshift-data:DescribeStatement
+                  - redshift-data:GetStatementResult
+                  - lambda:InvokeFunction
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - redshift:GetClusterCredentials
+                Resource:
                   - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}
                   - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbuser:${RedshiftCluster}/*
                   - !Sub arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:dbname:${RedshiftCluster}/*
@@ -1534,6 +1705,81 @@ Resources:
           ResponseModels:
             application/json: 'Empty'
 
+  # API Gateway resource for the retrieve song signed URL endpoint
+  RetrieveSongUrlResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: retrieve-song-url
+      RestApiId: !Ref ApiGateway
+
+  # API Gateway method for the retrieve song signed URL endpoint
+  RetrieveSongUrlMethod:
+    Type: AWS::ApiGateway::Method
+    DependsOn: ApiGatewayAuthorizer
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      HttpMethod: GET
+      ResourceId: !Ref RetrieveSongUrlResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt RetrieveSongUrlLambda.Arn
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+      RequestParameters:
+        method.request.header.Authorization: true
+        method.request.header.Origin: false
+        method.request.header.Access-Control-Request-Method: false
+        method.request.header.Access-Control-Request-Headers: false
+        method.request.querystring.song_id: true
+
+  # OPTIONS method for the retrieve song signed URL endpoint
+  RetrieveSongUrlOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: OPTIONS
+      ResourceId: !Ref RetrieveSongUrlResource
+      RestApiId: !Ref ApiGateway
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        PassthroughBehavior: WHEN_NO_MATCH
+        ContentHandling: CONVERT_TO_TEXT
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://ayauplay.ayaumusic.com'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            ContentHandling: CONVERT_TO_TEXT
+            ResponseTemplates:
+              application/json: '{}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: 'Empty'
+
   # OPTIONS method for the record stream endpoint
   RecordStreamOptionsMethod:
     Type: AWS::ApiGateway::Method
@@ -1572,6 +1818,14 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt RetrieveSongsLambda.Arn
+      Principal: apigateway.amazonaws.com
+
+  # Permission for API Gateway to invoke the RetrieveSongUrlLambda function
+  RetrieveSongUrlLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt RetrieveSongUrlLambda.Arn
       Principal: apigateway.amazonaws.com
 
   # Cognito User Pools Authorizer configuration
@@ -1801,12 +2055,13 @@ Resources:
   # API Gateway deployment configuration
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: 
+    DependsOn:
       - ApiGatewayAuthorizer
       - UserPoolClient
       - ApiGatewayMethod
       - PlaylistGetMethod
       - RetrieveSongsMethod
+      - RetrieveSongUrlMethod
       - RecordStreamMethod
     Properties:
       RestApiId: !Ref ApiGateway
@@ -1887,6 +2142,10 @@ Outputs:
   RetrieveSongsApiUrl:
     Description: URL for the Retrieve Songs API Gateway
     Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/retrieve-songs
+
+  RetrieveSongUrlApiUrl:
+    Description: URL for the Retrieve Song URL API Gateway
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/retrieve-song-url
 
   CloudFrontDomain:
     Description: CloudFront Distribution Domain Name
