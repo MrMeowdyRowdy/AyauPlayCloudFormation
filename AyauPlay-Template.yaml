@@ -378,6 +378,7 @@ Resources:
                   SELECT pp.permission_id,
                          pp.user_id,
                          pp.playlist_id,
+                         p.uuid,
                          p.name,
                          p.s3_artkey
                   FROM playlist_permissions pp
@@ -423,12 +424,12 @@ Resources:
                   logger.info("RAW RECORDS BEFORE SIGNING:")
                   logger.info(json.dumps(records, indent=2))
                   logger
-          
+
                   playlists = [
                       {
-                          "playlist_id": record[2].get('longValue'),
-                          "name": record[3].get('stringValue'),
-                          "s3_artkey": record[4].get('stringValue') if record[4].get('stringValue') is not None else None
+                          "playlist_id": record[3].get('stringValue'),
+                          "name": record[4].get('stringValue'),
+                          "s3_artkey": record[5].get('stringValue') if record[5].get('stringValue') is not None else None
                       }
                       for record in records
                   ]
@@ -703,6 +704,45 @@ Resources:
                   logger.error(traceback.format_exc())
                   raise
 
+          def get_playlist_id_by_uuid(playlist_uuid):
+              try:
+                  sql = f"SELECT playlist_id FROM playlists WHERE uuid = '{playlist_uuid}'"
+                  logger.info(f"Executing SQL to get playlist ID: {sql}")
+
+                  response = redshift_data.execute_statement(
+                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                      Database=os.environ['REDSHIFT_DATABASE'],
+                      DbUser=os.environ['REDSHIFT_DB_USER'],
+                      Sql=sql
+                  )
+
+                  statement_id = response['Id']
+                  logger.info(f"Got statement ID for playlist lookup: {statement_id}")
+
+                  while True:
+                      status = redshift_data.describe_statement(Id=statement_id)
+                      logger.info(f"Playlist lookup status: {status}")
+                      if status['Status'] == 'FINISHED':
+                          break
+                      elif status['Status'] in ['FAILED', 'ABORTED']:
+                          error = status.get('Error', 'Unknown error')
+                          logger.error(f"Playlist lookup failed: {error}")
+                          raise Exception(f"Playlist lookup failed: {error}")
+
+                  results = redshift_data.get_statement_result(Id=statement_id)
+                  logger.info(f"Playlist lookup results: {json.dumps(results)}")
+
+                  records = results.get('Records', [])
+                  if not records:
+                      return None
+
+                  return records[0][0].get('longValue')
+
+              except Exception as e:
+                  logger.error(f"Error fetching playlist_id by uuid: {str(e)}")
+                  logger.error(traceback.format_exc())
+                  raise
+
           def handler(event, context):
               try:
                   # Log incoming request
@@ -721,11 +761,23 @@ Resources:
                           'body': json.dumps({'error': 'playlist_id is required'})
                       }
                   
-                  playlist_id = query_params['playlist_id']
-                  
+                  playlist_uuid = query_params['playlist_id']
+
+                  playlist_id = get_playlist_id_by_uuid(playlist_uuid)
+                  if playlist_id is None:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': 'https://ayauplay.ayaumusic.com',
+                              'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                          },
+                          'body': json.dumps({'error': 'Playlist not found'})
+                      }
+
                   # Get songs from playlist
                   songs = get_songs_from_playlist(playlist_id)
-                  
+
                   # Return response
                   return {
                       'statusCode': 200,
@@ -735,7 +787,7 @@ Resources:
                           "Access-Control-Allow-Methods": "OPTIONS,GET"
                       },
                       'body': json.dumps({
-                          'playlist_id': playlist_id,
+                          'playlist_id': playlist_uuid,
                           'songs': songs
                       })
                   }
