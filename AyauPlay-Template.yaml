@@ -782,12 +782,28 @@ Resources:
           redshift_data = boto3.client('redshift-data')
           lambda_client = boto3.client('lambda')
 
-          def get_song(song_id):
+          def generate_signed_url(object_key):
+              if not object_key:
+                  return ''
+
+              res = lambda_client.invoke(
+                  FunctionName=os.environ['SIGNED_URL_LAMBDA'],
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps({'object_key': object_key})
+              )
+              res_payload = json.loads(res['Payload'].read())
+
+              if res_payload.get('status') == 200:
+                  return res_payload.get('signed_url', '')
+
+              return ''
+
+          def get_song(song_uuid):
               try:
                   sql = f"""
-                  SELECT s.title, s.author, s.performer, s.duration, s.uuid, s.s3_key
+                  SELECT s.title, s.author, s.performer, s.duration, s.uuid, s.s3_key, s.s3_artkey
                   FROM songs s
-                  WHERE s.song_id = '{song_id}'
+                  WHERE s.uuid = '{song_uuid}'
                   LIMIT 1;
                   """
 
@@ -820,18 +836,11 @@ Resources:
                       return None
 
                   record = records[0]
-                  s3_key = record[5]['stringValue']
+                  s3_key = record[5].get('stringValue') if not record[5].get('isNull') else ''
+                  s3_artkey = record[6].get('stringValue') if not record[6].get('isNull') else ''
 
-                  res = lambda_client.invoke(
-                      FunctionName=os.environ['SIGNED_URL_LAMBDA'],
-                      InvocationType='RequestResponse',
-                      Payload=json.dumps({'object_key': s3_key})
-                  )
-                  res_payload = json.loads(res['Payload'].read())
-
-                  url = ''
-                  if res_payload.get('status') == 200:
-                      url = res_payload.get('signed_url', '')
+                  url = generate_signed_url(s3_key)
+                  artwork_url = generate_signed_url(s3_artkey)
 
                   return {
                       "title": record[0]['stringValue'],
@@ -839,7 +848,8 @@ Resources:
                       "performer": record[2]['stringValue'],
                       "duration": record[3]['stringValue'],
                       "uuid": record[4]['stringValue'],
-                      "url": url
+                      "url": url,
+                      "artwork_url": artwork_url
                   }
 
               except Exception as e:
@@ -852,7 +862,7 @@ Resources:
                   logger.info(f"Received event: {json.dumps(event)}")
 
                   query_params = event.get('queryStringParameters', {})
-                  if not query_params or 'song_id' not in query_params:
+                  if not query_params or 'uuid' not in query_params:
                       return {
                           'statusCode': 400,
                           'headers': {
@@ -860,11 +870,11 @@ Resources:
                               'Access-Control-Allow-Origin': 'https://ayauplay.ayaumusic.com',
                               'Access-Control-Allow-Methods': 'GET,OPTIONS'
                           },
-                          'body': json.dumps({'error': 'song_id is required'})
+                          'body': json.dumps({'error': 'uuid is required'})
                       }
 
-                  song_id = query_params['song_id']
-                  song = get_song(song_id)
+                  song_uuid = query_params['uuid']
+                  song = get_song(song_uuid)
 
                   if song is None:
                       return {
