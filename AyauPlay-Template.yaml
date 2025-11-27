@@ -650,7 +650,7 @@ Resources:
           def get_songs_from_playlist(playlist_id):
               try:
                   sql = f"""
-                  SELECT s.title, s.author, s.performer, s.duration, s.s3_key, '' AS s3_artkey
+                  SELECT s.title, s.author, s.performer, s.duration, s.uuid
                   FROM songs s
                   INNER JOIN playlist_songs ps ON s.song_id = ps.song_id
                   WHERE ps.playlist_id = '{playlist_id}'
@@ -684,14 +684,12 @@ Resources:
                   songs = []
                   for record in results.get('Records', []):
                       try:
-                          s3_key = record[4]['stringValue']
                           songs.append({
                               "title": record[0]['stringValue'],
                               "author": record[1]['stringValue'],
                               "performer": record[2]['stringValue'],
                               "duration": record[3]['stringValue'],
-                              "s3_artkey": record[4]['stringValue'],
-                              "s3_key": s3_key
+                              "uuid": record[4]['stringValue']
                           })
                       except Exception as e:
                           logger.error(f"Error processing record: {str(e)}")
@@ -787,7 +785,7 @@ Resources:
           def get_song(song_id):
               try:
                   sql = f"""
-                  SELECT s.title, s.author, s.performer, s.duration, s.s3_key, '' AS s3_artkey
+                  SELECT s.title, s.author, s.performer, s.duration, s.uuid, s.s3_key
                   FROM songs s
                   WHERE s.song_id = '{song_id}'
                   LIMIT 1;
@@ -822,7 +820,7 @@ Resources:
                       return None
 
                   record = records[0]
-                  s3_key = record[4]['stringValue']
+                  s3_key = record[5]['stringValue']
 
                   res = lambda_client.invoke(
                       FunctionName=os.environ['SIGNED_URL_LAMBDA'],
@@ -840,8 +838,7 @@ Resources:
                       "author": record[1]['stringValue'],
                       "performer": record[2]['stringValue'],
                       "duration": record[3]['stringValue'],
-                      "s3_artkey": record[4]['stringValue'],
-                      "s3_key": s3_key,
+                      "uuid": record[4]['stringValue'],
                       "url": url
                   }
 
