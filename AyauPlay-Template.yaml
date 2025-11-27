@@ -650,7 +650,7 @@ Resources:
           def get_songs_from_playlist(playlist_id):
               try:
                   sql = f"""
-                  SELECT s.title, s.author, s.performer, s.duration, s.s3_key, '' AS s3_artkey
+                  SELECT s.song_id, s.title, s.author, s.performer, s.duration
                   FROM songs s
                   INNER JOIN playlist_songs ps ON s.song_id = ps.song_id
                   WHERE ps.playlist_id = '{playlist_id}'
@@ -684,14 +684,12 @@ Resources:
                   songs = []
                   for record in results.get('Records', []):
                       try:
-                          s3_key = record[4]['stringValue']
                           songs.append({
-                              "title": record[0]['stringValue'],
-                              "author": record[1]['stringValue'],
-                              "performer": record[2]['stringValue'],
-                              "duration": record[3]['stringValue'],
-                              "s3_artkey": record[4]['stringValue'],
-                              "s3_key": s3_key
+                              "song_id": record[0]['stringValue'],
+                              "title": record[1]['stringValue'],
+                              "author": record[2]['stringValue'],
+                              "performer": record[3]['stringValue'],
+                              "duration": record[4]['stringValue']
                           })
                       except Exception as e:
                           logger.error(f"Error processing record: {str(e)}")
