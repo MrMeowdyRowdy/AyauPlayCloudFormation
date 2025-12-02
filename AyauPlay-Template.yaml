@@ -303,9 +303,11 @@ Resources:
                   uploaded_by = claims['sub']
 
                   # Insert song details into the database
+                  song_uuid = str(uuid.uuid4())
+
                   sql = f"""
-                  INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, s3_artkey, uploaded_by, uploaded_at)
-                  VALUES ('{uuid.uuid4()}', '{title}', '{author}', '{performer}', '{ISRC}', {IPI}, {code}, {duration}, '{s3_key}', '{s3_artkey}', '{uploaded_by}', GETDATE());
+                  INSERT INTO songs (uuid, title, author, performer, ISRC, ISWC, IPI, code, duration, s3_key, s3_artkey, uploaded_by, uploaded_at)
+                  VALUES ('{song_uuid}', '{title}', '{author}', '{performer}', '{ISRC}', '{ISWC}', '{IPI}', '{code}', '{duration}', '{s3_key}', '{s3_artkey}', '{uploaded_by}', GETDATE());
                   """
                   redshift_data.execute_statement(
                       ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
@@ -1267,6 +1269,7 @@ Resources:
                           DROP TABLE IF EXISTS songs;
                           CREATE TABLE songs (
                               song_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+                              uuid VARCHAR(36) UNIQUE NOT NULL,
                               title VARCHAR(255) NOT NULL,
                               author VARCHAR(255) NOT NULL,
                               performer VARCHAR(255) NOT NULL,
@@ -1277,6 +1280,7 @@ Resources:
                               duration VARCHAR(8),
                               s3_key VARCHAR(512) NOT NULL,
                               s3_artkey VARCHAR(512),
+                              uploaded_by VARCHAR(255),
                               uploaded_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """,
@@ -1294,7 +1298,7 @@ Resources:
                           CREATE TABLE stream_analytics (
                               stream_id BIGINT IDENTITY(1,1) PRIMARY KEY,
                               song_id BIGINT REFERENCES songs(song_id),
-                              user_id BIGINT,
+                              user_id VARCHAR(255),
                               stream_duration INTEGER,
                               streamed_at TIMESTAMP DEFAULT GETDATE()
                           );
@@ -1384,32 +1388,91 @@ Resources:
         ZipFile: |
           import json
           import boto3
-          import uuid
           import os
+          import logging
+          import time
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
 
           redshift_data = boto3.client('redshift-data')
 
+          def run_statement(sql):
+              response = redshift_data.execute_statement(
+                  ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                  Database=os.environ['REDSHIFT_DATABASE'],
+                  DbUser=os.environ['REDSHIFT_DB_USER'],
+                  Sql=sql
+              )
+
+              statement_id = response['Id']
+
+              while True:
+                  status = redshift_data.describe_statement(Id=statement_id)
+                  if status['Status'] == 'FINISHED':
+                      break
+                  if status['Status'] in ['FAILED', 'ABORTED']:
+                      raise Exception(status.get('Error', 'Statement failed'))
+                  time.sleep(0.25)
+
+              return redshift_data.get_statement_result(Id=statement_id)
+
           def handler(event, context):
               try:
-                  body = json.loads(event['body'])
-                  song_id = body['song_id']
-                  stream_duration = body['stream_duration']
+                  body = json.loads(event.get('body', '{}'))
+                  song_uuid = body.get('song_uuid') or body.get('uuid')
+                  stream_duration = int(body.get('stream_duration', 0))
 
                   # Extract user information from Cognito claims
-                  claims = event['requestContext']['authorizer']['claims']
-                  user_id = claims['sub']
+                  claims = event.get('requestContext', {}).get('authorizer', {}).get('claims', {})
+                  user_id = claims.get('sub')
+
+                  if not song_uuid:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('song_uuid is required')
+                      }
+
+                  if user_id is None:
+                      return {
+                          'statusCode': 401,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('Unauthorized')
+                      }
+
+                  # Fetch the database primary key for the provided song UUID
+                  get_song_sql = f"SELECT song_id FROM songs WHERE uuid = '{song_uuid}' LIMIT 1;"
+                  result = run_statement(get_song_sql)
+
+                  records = result.get('Records', [])
+                  if not records:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('Song not found')
+                      }
+
+                  song_id = records[0][0]['longValue']
 
                   sql = f"""
                   INSERT INTO stream_analytics (song_id, user_id, stream_duration)
-                  VALUES ('{song_id}', '{user_id}', {stream_duration},);
+                  VALUES ({song_id}, '{user_id}', {stream_duration});
                   """
 
-                  response = redshift_data.execute_statement(
-                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
-                      Database=os.environ['REDSHIFT_DATABASE'],
-                      DbUser=os.environ['REDSHIFT_DB_USER'],
-                      Sql=sql
-                  )
+                  run_statement(sql)
 
                   return {
                       'statusCode': 200,
@@ -1421,6 +1484,7 @@ Resources:
                       'body': json.dumps('Stream data recorded successfully')
                   }
               except Exception as e:
+                  logger.error(f"Failed to record stream analytics: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
