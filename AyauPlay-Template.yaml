@@ -212,6 +212,7 @@ Resources:
           import boto3
           import base64
           import os
+          import re
           import uuid
 
           # Initialize S3 and Redshift clients
@@ -249,6 +250,15 @@ Resources:
               return CONTENT_TYPES.get(ext, 'application/octet-stream')
 
           def parse_body(event_body):
+              def try_json_loads(payload):
+                  try:
+                      return json.loads(payload)
+                  except json.JSONDecodeError:
+                      # Handle common JavaScript-style objects without quoted keys
+                      # e.g., {song_uuid: "123", stream_duration: "00:04"}
+                      fixed_payload = re.sub(r'([,{\s])(\w+)\s*:', r'\1"\2":', payload)
+                      return json.loads(fixed_payload)
+
               if isinstance(event_body, dict):
                   return event_body
               if not event_body:
@@ -258,7 +268,7 @@ Resources:
                   stripped = event_body.strip()
                   if not stripped:
                       return {}
-                  return json.loads(stripped)
+                  return try_json_loads(stripped)
 
               return {}
 
@@ -1439,6 +1449,7 @@ Resources:
           import boto3
           import os
           import logging
+          import re
           import time
 
           logger = logging.getLogger()
@@ -1467,6 +1478,15 @@ Resources:
               return redshift_data.get_statement_result(Id=statement_id)
 
           def parse_body(event_body):
+              def try_json_loads(payload):
+                  try:
+                      return json.loads(payload)
+                  except json.JSONDecodeError:
+                      # Handle common JavaScript-style objects without quoted keys
+                      # e.g., {song_uuid: "123", stream_duration: "00:04"}
+                      fixed_payload = re.sub(r'([,{\s])(\w+)\s*:', r'\1"\2":', payload)
+                      return json.loads(fixed_payload)
+
               if isinstance(event_body, dict):
                   return event_body
               if not event_body:
@@ -1476,7 +1496,7 @@ Resources:
                   stripped = event_body.strip()
                   if not stripped:
                       return {}
-                  return json.loads(stripped)
+                  return try_json_loads(stripped)
 
               return {}
 
