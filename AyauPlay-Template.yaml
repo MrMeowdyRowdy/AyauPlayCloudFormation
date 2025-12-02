@@ -248,71 +248,121 @@ Resources:
               ext = os.path.splitext(filename)[1].lower()
               return CONTENT_TYPES.get(ext, 'application/octet-stream')
 
-          def handler(event, context):
-              """
-              Main Lambda handler for file uploads
-              Args:
-                  event (dict): API Gateway event
-                  context (object): Lambda context
-              Returns:
-                  dict: API Gateway response
-              """
-              try:
-                  # Parse the request body and decode the file
-                  body = json.loads(event['body'])
-                  file_content = base64.b64decode(body['file'])
-                  file_name = body['fileName']
-                  title = body['title']
-                  author = body['author']
-                  performer = body['performer']
-                  ISRC = body['ISRC']
-                  ISWC = body['ISWC']
-                  IPI = body['IPI']
-                  code = body['code']
-                  duration = body.get('duration', 0)
-                  s3_artkey = body.get('s3_artkey', '')
+          def parse_body(event_body):
+              if isinstance(event_body, dict):
+                  return event_body
+              if not event_body:
+                  return {}
 
-                  # Validate file type
-                  if not is_valid_audio(file_name):
+              if isinstance(event_body, str):
+                  stripped = event_body.strip()
+                  if not stripped:
+                      return {}
+                  return json.loads(stripped)
+
+              return {}
+
+          def parse_duration(duration_value):
+              if duration_value is None:
+                  return 0
+
+              if isinstance(duration_value, (int, float)):
+                  return int(duration_value)
+
+              if isinstance(duration_value, str):
+                  duration_value = duration_value.strip()
+                  if duration_value.isdigit():
+                      return int(duration_value)
+
+                  # Handle MM:SS inputs like "00:04"
+                  if ':' in duration_value:
+                      parts = duration_value.split(':')
+                      if len(parts) == 2 and all(p.isdigit() for p in parts):
+                          minutes, seconds = parts
+                          return int(minutes) * 60 + int(seconds)
+
+              raise ValueError('Invalid stream_duration format')
+
+          def handler(event, context):
+              try:
+                  try:
+                      body = parse_body(event.get('body'))
+                  except json.JSONDecodeError:
                       return {
                           'statusCode': 400,
                           'headers': {
-                              'Access-Control-Allow-Headers': 'Content-Type',
-                              'Access-Control-Allow-Origin': 'https://ayauplay.ayaumusic.com',
-                              'Access-Control-Allow-Methods': 'OPTIONS,POST'
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
                           },
-                          'body': json.dumps('Only .wav, .mp3, and .aac files are allowed')
+                          'body': json.dumps('Invalid JSON payload')
                       }
 
-                  # Get the environment-specific bucket name
-                  bucket_name = f"songs-bucket-{os.environ['ENVIRONMENT']}"
-                  
-                  # Generate a unique key for the S3 object
-                  s3_key = f"{uuid.uuid4()}_{file_name}"
-                  
-                  # Upload file to S3 with proper content type
-                  s3.put_object(
-                      Bucket=bucket_name,
-                      Key=s3_key,
-                      Body=file_content,
-                      ContentType=get_content_type(file_name)
-                  )
+                  song_uuid = body.get('song_uuid') or body.get('uuid') or body.get('song_id')
 
-                  # Extract user information from Cognito claims
-                  claims = event['requestContext']['authorizer']['claims']
-                  uploaded_by = claims['sub']
+                  try:
+                      stream_duration = parse_duration(body.get('stream_duration', 0))
+                  except ValueError as parse_error:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps(str(parse_error))
+                      }
 
-                  # Insert song details into the database
+                  # Extract user information from Cognito claims, fall back to request body
+                  claims = event.get('requestContext', {}).get('authorizer', {}).get('claims', {})
+                  user_id = claims.get('sub') or body.get('user_id')
+
+                  if not song_uuid:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('song_uuid is required')
+                      }
+
+                  if user_id is None:
+                      return {
+                          'statusCode': 401,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('Unauthorized')
+                      }
+
+                  # Fetch the database primary key for the provided song UUID
+                  get_song_sql = f"SELECT song_id FROM songs WHERE uuid = '{song_uuid}' LIMIT 1;"
+                  result = run_statement(get_song_sql)
+
+                  records = result.get('Records', [])
+                  if not records:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('Song not found')
+                      }
+
+                  song_id = records[0][0]['longValue']
+
                   sql = f"""
-                  INSERT INTO songs (song_id, title, author, performer, ISRC, IPI, code, duration, s3_key, s3_artkey, uploaded_by, uploaded_at)
-                  VALUES ('{uuid.uuid4()}', '{title}', '{author}', '{performer}', '{ISRC}', {IPI}, {code}, {duration}, '{s3_key}', '{s3_artkey}', '{uploaded_by}', GETDATE());
+                  INSERT INTO stream_analytics (song_id, user_id, stream_duration)
+                  VALUES ({song_id}, '{user_id}', {stream_duration});
                   """
-                  redshift_data.execute_statement(
-                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
-                      Database=os.environ['REDSHIFT_DATABASE'],
-                      DbUser=os.environ['REDSHIFT_DB_USER'],
-                      Sql=sql
-                  )
+
+                  run_statement(sql)
 
                   return {
                       'statusCode': 200,
@@ -321,9 +371,10 @@ Resources:
                           "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                           "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
-                      'body': json.dumps('File uploaded and song details stored successfully')
+                      'body': json.dumps('Stream recorded successfully')
                   }
               except Exception as e:
+                  logger.error(f"Error recording stream: {e}")
                   return {
                       'statusCode': 500,
                       'headers': {
@@ -331,7 +382,7 @@ Resources:
                           "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                           "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
-                      'body': json.dumps(f'Error: {str(e)}')
+                      'body': json.dumps(f"Error recording stream: {str(e)}")
                   }
       Runtime: python3.10  # Runtime environment
       Environment:
@@ -1267,6 +1318,7 @@ Resources:
                           DROP TABLE IF EXISTS songs;
                           CREATE TABLE songs (
                               song_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+                              uuid VARCHAR(36) UNIQUE NOT NULL,
                               title VARCHAR(255) NOT NULL,
                               author VARCHAR(255) NOT NULL,
                               performer VARCHAR(255) NOT NULL,
@@ -1277,6 +1329,7 @@ Resources:
                               duration VARCHAR(8),
                               s3_key VARCHAR(512) NOT NULL,
                               s3_artkey VARCHAR(512),
+                              uploaded_by VARCHAR(255),
                               uploaded_at TIMESTAMP DEFAULT GETDATE()
                           );
                           """,
@@ -1294,7 +1347,7 @@ Resources:
                           CREATE TABLE stream_analytics (
                               stream_id BIGINT IDENTITY(1,1) PRIMARY KEY,
                               song_id BIGINT REFERENCES songs(song_id),
-                              user_id BIGINT,
+                              user_id VARCHAR(255),
                               stream_duration INTEGER,
                               streamed_at TIMESTAMP DEFAULT GETDATE()
                           );
@@ -1384,32 +1437,150 @@ Resources:
         ZipFile: |
           import json
           import boto3
-          import uuid
           import os
+          import logging
+          import time
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
 
           redshift_data = boto3.client('redshift-data')
 
+          def run_statement(sql):
+              response = redshift_data.execute_statement(
+                  ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
+                  Database=os.environ['REDSHIFT_DATABASE'],
+                  DbUser=os.environ['REDSHIFT_DB_USER'],
+                  Sql=sql
+              )
+
+              statement_id = response['Id']
+
+              while True:
+                  status = redshift_data.describe_statement(Id=statement_id)
+                  if status['Status'] == 'FINISHED':
+                      break
+                  if status['Status'] in ['FAILED', 'ABORTED']:
+                      raise Exception(status.get('Error', 'Statement failed'))
+                  time.sleep(0.25)
+
+              return redshift_data.get_statement_result(Id=statement_id)
+
+          def parse_body(event_body):
+              if isinstance(event_body, dict):
+                  return event_body
+              if not event_body:
+                  return {}
+
+              if isinstance(event_body, str):
+                  stripped = event_body.strip()
+                  if not stripped:
+                      return {}
+                  return json.loads(stripped)
+
+              return {}
+
+          def parse_duration(duration_value):
+              if duration_value is None:
+                  return 0
+
+              if isinstance(duration_value, (int, float)):
+                  return int(duration_value)
+
+              if isinstance(duration_value, str):
+                  duration_value = duration_value.strip()
+                  if duration_value.isdigit():
+                      return int(duration_value)
+
+                  # Handle MM:SS inputs like "00:04"
+                  if ':' in duration_value:
+                      parts = duration_value.split(':')
+                      if len(parts) == 2 and all(p.isdigit() for p in parts):
+                          minutes, seconds = parts
+                          return int(minutes) * 60 + int(seconds)
+
+              raise ValueError('Invalid stream_duration format')
+
           def handler(event, context):
               try:
-                  body = json.loads(event['body'])
-                  song_id = body['song_id']
-                  stream_duration = body['stream_duration']
+                  try:
+                      body = parse_body(event.get('body'))
+                  except json.JSONDecodeError:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('Invalid JSON payload')
+                      }
 
-                  # Extract user information from Cognito claims
-                  claims = event['requestContext']['authorizer']['claims']
-                  user_id = claims['sub']
+                  song_uuid = body.get('song_uuid') or body.get('uuid') or body.get('song_id')
+
+                  try:
+                      stream_duration = parse_duration(body.get('stream_duration', 0))
+                  except ValueError as parse_error:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps(str(parse_error))
+                      }
+
+                  # Extract user information from Cognito claims, fall back to request body
+                  claims = event.get('requestContext', {}).get('authorizer', {}).get('claims', {})
+                  user_id = claims.get('sub') or body.get('user_id')
+
+                  if not song_uuid:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('song_uuid is required')
+                      }
+
+                  if user_id is None:
+                      return {
+                          'statusCode': 401,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('Unauthorized')
+                      }
+
+                  # Fetch the database primary key for the provided song UUID
+                  get_song_sql = f"SELECT song_id FROM songs WHERE uuid = '{song_uuid}' LIMIT 1;"
+                  result = run_statement(get_song_sql)
+
+                  records = result.get('Records', [])
+                  if not records:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('Song not found')
+                      }
+
+                  song_id = records[0][0]['longValue']
 
                   sql = f"""
                   INSERT INTO stream_analytics (song_id, user_id, stream_duration)
-                  VALUES ('{song_id}', '{user_id}', {stream_duration},);
+                  VALUES ({song_id}, '{user_id}', {stream_duration});
                   """
 
-                  response = redshift_data.execute_statement(
-                      ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
-                      Database=os.environ['REDSHIFT_DATABASE'],
-                      DbUser=os.environ['REDSHIFT_DB_USER'],
-                      Sql=sql
-                  )
+                  run_statement(sql)
 
                   return {
                       'statusCode': 200,
@@ -1418,9 +1589,10 @@ Resources:
                           "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                           "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
-                      'body': json.dumps('Stream data recorded successfully')
+                      'body': json.dumps('Stream recorded successfully')
                   }
               except Exception as e:
+                  logger.error(f"Error recording stream: {e}")
                   return {
                       'statusCode': 500,
                       'headers': {
@@ -1428,7 +1600,7 @@ Resources:
                           "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                           "Access-Control-Allow-Methods": "OPTIONS,POST"
                       },
-                      'body': json.dumps(f'Error: {str(e)}')
+                      'body': json.dumps(f"Error recording stream: {str(e)}")
                   }
       Runtime: python3.10
       Environment:
