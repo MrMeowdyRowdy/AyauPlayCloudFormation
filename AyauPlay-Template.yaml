@@ -1449,7 +1449,6 @@ Resources:
           import boto3
           import os
           import logging
-          import re
           import time
 
           logger = logging.getLogger()
@@ -1478,49 +1477,11 @@ Resources:
 
               return redshift_data.get_statement_result(Id=statement_id)
 
-          def parse_body(event_body):
-              def try_json_loads(payload):
-                  try:
-                      return json.loads(payload)
-                  except json.JSONDecodeError:
-                      # Handle common JavaScript-style objects without quoted keys
-                      # e.g., {song_uuid: "123", stream_duration: "00:04"}
-                      fixed_payload = re.sub(r'([,{\s])(\w+)\s*:', r'\1"\2":', payload)
-                      return json.loads(fixed_payload)
-
-              if isinstance(event_body, dict):
-                  return event_body
-              if not event_body:
-                  return {}
-
-              if isinstance(event_body, str):
-                  stripped = event_body.strip()
-                  if not stripped:
-                      return {}
-                  return try_json_loads(stripped)
-
-              return {}
-
-          def parse_duration(duration_value):
-              if duration_value is None:
-                  return 0
-
-              if isinstance(duration_value, (int, float)):
-                  return int(duration_value)
-
-              if isinstance(duration_value, str):
-                  duration_value = duration_value.strip()
-                  if duration_value.isdigit():
-                      return int(duration_value)
-
-                  # Handle MM:SS inputs like "00:04"
-                  if ':' in duration_value:
-                      parts = duration_value.split(':')
-                      if len(parts) == 2 and all(p.isdigit() for p in parts):
-                          minutes, seconds = parts
-                          return int(minutes) * 60 + int(seconds)
-
-              raise ValueError('Invalid stream_duration format')
+          def get_user_id(event):
+              authorizer = event.get('requestContext', {}).get('authorizer', {})
+              claims = authorizer.get('claims', {}) or {}
+              user_id = claims.get('sub') or authorizer.get('principalId')
+              return user_id
 
           def get_user_id(event):
               authorizer = event.get('requestContext', {}).get('authorizer', {})
@@ -1530,8 +1491,9 @@ Resources:
 
           def handler(event, context):
               try:
+                  body_raw = event.get('body')
                   try:
-                      body = parse_body(event.get('body'))
+                      body = body_raw if isinstance(body_raw, dict) else json.loads(body_raw or '{}')
                   except json.JSONDecodeError:
                       return {
                           'statusCode': 400,
@@ -1543,24 +1505,10 @@ Resources:
                           'body': json.dumps('Invalid JSON payload')
                       }
 
-                  song_uuid = body.get('song_uuid') or body.get('uuid') or body.get('song_id')
+                  song_uuid = body.get('song_uuid')
+                  stream_duration = body.get('stream_duration')
 
-                  try:
-                      stream_duration = parse_duration(body.get('stream_duration', 0))
-                  except ValueError as parse_error:
-                      return {
-                          'statusCode': 400,
-                          'headers': {
-                              "Access-Control-Allow-Origin": "*",
-                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                              "Access-Control-Allow-Methods": "OPTIONS,POST"
-                          },
-                          'body': json.dumps(str(parse_error))
-                      }
-
-                  user_id = get_user_id(event)
-
-                  if not song_uuid:
+                  if song_uuid is None:
                       return {
                           'statusCode': 400,
                           'headers': {
@@ -1570,6 +1518,41 @@ Resources:
                           },
                           'body': json.dumps('song_uuid is required')
                       }
+
+                  if stream_duration is None:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('stream_duration is required')
+                      }
+
+                  if not isinstance(song_uuid, str):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('song_uuid must be a string')
+                      }
+
+                  if not isinstance(stream_duration, int):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('stream_duration must be an integer (seconds)')
+                      }
+
+                  user_id = get_user_id(event)
 
                   if user_id is None:
                       return {
