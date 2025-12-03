@@ -1483,6 +1483,12 @@ Resources:
               user_id = claims.get('sub') or authorizer.get('principalId')
               return user_id
 
+          def get_user_id(event):
+              authorizer = event.get('requestContext', {}).get('authorizer', {})
+              claims = authorizer.get('claims', {}) or {}
+              user_id = claims.get('sub') or authorizer.get('principalId')
+              return user_id
+
           def handler(event, context):
               try:
                   body_raw = event.get('body')
