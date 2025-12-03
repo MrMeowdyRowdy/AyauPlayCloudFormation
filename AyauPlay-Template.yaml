@@ -1450,12 +1450,14 @@ Resources:
           import os
           import logging
           import time
-
+          import base64
+          
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-
+          
           redshift_data = boto3.client('redshift-data')
-
+          
+          
           def run_statement(sql, parameters=None):
               response = redshift_data.execute_statement(
                   ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
@@ -1464,9 +1466,9 @@ Resources:
                   Sql=sql,
                   Parameters=parameters or []
               )
-
+          
               statement_id = response['Id']
-
+          
               while True:
                   status = redshift_data.describe_statement(Id=statement_id)
                   if status['Status'] == 'FINISHED':
@@ -1474,74 +1476,56 @@ Resources:
                   if status['Status'] in ['FAILED', 'ABORTED']:
                       raise Exception(status.get('Error', 'Statement failed'))
                   time.sleep(0.25)
-
+          
               return redshift_data.get_statement_result(Id=statement_id)
-
+          
+          
           def get_user_id(event):
-              authorizer = event.get('requestContext', {}).get('authorizer', {})
+              authorizer = event.get('requestContext', {}).get('authorizer', {}) or {}
               claims = authorizer.get('claims', {}) or {}
               user_id = claims.get('sub') or authorizer.get('principalId')
               return user_id
-
-          def get_user_id(event):
-              authorizer = event.get('requestContext', {}).get('authorizer', {})
-              claims = authorizer.get('claims', {}) or {}
-              user_id = claims.get('sub') or authorizer.get('principalId')
-              return user_id
-
+          
+          
           def handler(event, context):
               try:
-                  body_raw = event.get('body')
+                  logger.info("Incoming event: %s", json.dumps(event))
+          
+                  # 1) Read and decode body (simple JSON only)
+                  raw_body = event.get('body', '')
+          
+                  # If API Gateway sent it base64-encoded, decode first
+                  if event.get('isBase64Encoded'):
+                      raw_body = base64.b64decode(raw_body).decode('utf-8')
+          
+                  if isinstance(raw_body, dict):
+                      body = raw_body
+                  else:
+                      if not raw_body:
+                          body = {}
+                      else:
+                          try:
+                              body = json.loads(raw_body)
+                          except json.JSONDecodeError:
+                              logger.error("Failed to parse JSON body: %r", raw_body)
+                              return {
+                                  'statusCode': 400,
+                                  'headers': {
+                                      "Access-Control-Allow-Origin": "*",
+                                      "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                                      "Access-Control-Allow-Methods": "OPTIONS,POST"
+                                  },
+                                  'body': json.dumps('Invalid JSON payload')
+                              }
+          
+                  # 2) Extract inputs
+                  song_uuid = body.get('song_uuid') or body.get('uuid') or body.get('song_id')
+          
+                  # Expect stream_duration as seconds (int)
                   try:
-                      body = body_raw if isinstance(body_raw, dict) else json.loads(body_raw or '{}')
-                  except json.JSONDecodeError:
-                      return {
-                          'statusCode': 400,
-                          'headers': {
-                              "Access-Control-Allow-Origin": "*",
-                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                              "Access-Control-Allow-Methods": "OPTIONS,POST"
-                          },
-                          'body': json.dumps('Invalid JSON payload')
-                      }
-
-                  song_uuid = body.get('song_uuid')
-                  stream_duration = body.get('stream_duration')
-
-                  if song_uuid is None:
-                      return {
-                          'statusCode': 400,
-                          'headers': {
-                              "Access-Control-Allow-Origin": "*",
-                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                              "Access-Control-Allow-Methods": "OPTIONS,POST"
-                          },
-                          'body': json.dumps('song_uuid is required')
-                      }
-
-                  if stream_duration is None:
-                      return {
-                          'statusCode': 400,
-                          'headers': {
-                              "Access-Control-Allow-Origin": "*",
-                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                              "Access-Control-Allow-Methods": "OPTIONS,POST"
-                          },
-                          'body': json.dumps('stream_duration is required')
-                      }
-
-                  if not isinstance(song_uuid, str):
-                      return {
-                          'statusCode': 400,
-                          'headers': {
-                              "Access-Control-Allow-Origin": "*",
-                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-                              "Access-Control-Allow-Methods": "OPTIONS,POST"
-                          },
-                          'body': json.dumps('song_uuid must be a string')
-                      }
-
-                  if not isinstance(stream_duration, int):
+                      stream_duration_raw = body.get('stream_duration', 0)
+                      stream_duration = int(stream_duration_raw)
+                  except (TypeError, ValueError):
                       return {
                           'statusCode': 400,
                           'headers': {
@@ -1551,9 +1535,20 @@ Resources:
                           },
                           'body': json.dumps('stream_duration must be an integer (seconds)')
                       }
-
+          
                   user_id = get_user_id(event)
-
+          
+                  if not song_uuid:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              "Access-Control-Allow-Origin": "*",
+                              "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                              "Access-Control-Allow-Methods": "OPTIONS,POST"
+                          },
+                          'body': json.dumps('song_uuid is required')
+                      }
+          
                   if user_id is None:
                       return {
                           'statusCode': 401,
@@ -1564,14 +1559,20 @@ Resources:
                           },
                           'body': json.dumps('Unauthorized')
                       }
-
-                  # Fetch the database primary key for the provided song UUID using a parameterized query
-                  get_song_sql = "SELECT song_id FROM songs WHERE uuid = :song_uuid LIMIT 1;"
+          
+                  # 3) DB: get song_id from songs.uuid and insert stream
+                  get_song_sql = """
+                      SELECT song_id
+                      FROM songs
+                      WHERE uuid = :song_uuid
+                      LIMIT 1;
+                  """
+          
                   song_result = run_statement(
                       get_song_sql,
                       parameters=[{"name": "song_uuid", "value": {"stringValue": song_uuid}}]
                   )
-
+          
                   records = song_result.get('Records', [])
                   if not records:
                       return {
@@ -1583,14 +1584,15 @@ Resources:
                           },
                           'body': json.dumps('Song not found')
                       }
-
-                  song_id = records[0][0].get('longValue') or records[0][0].get('stringValue')
-
-                  insert_sql = (
-                      "INSERT INTO stream_analytics (song_id, user_id, stream_duration) "
-                      "VALUES (:song_id, :user_id, :stream_duration);"
-                  )
-
+          
+                  song_id_value = records[0][0]
+                  song_id = song_id_value.get('longValue') or int(song_id_value.get('stringValue'))
+          
+                  insert_sql = """
+                      INSERT INTO stream_analytics (song_id, user_id, stream_duration)
+                      VALUES (:song_id, :user_id, :stream_duration);
+                  """
+          
                   run_statement(
                       insert_sql,
                       parameters=[
@@ -1599,7 +1601,7 @@ Resources:
                           {"name": "stream_duration", "value": {"longValue": int(stream_duration)}},
                       ],
                   )
-
+          
                   return {
                       'statusCode': 200,
                       'headers': {
@@ -1609,8 +1611,9 @@ Resources:
                       },
                       'body': json.dumps('Stream recorded successfully')
                   }
+          
               except Exception as e:
-                  logger.error(f"Error recording stream: {e}")
+                  logger.error(f"Error recording stream: {e}", exc_info=True)
                   return {
                       'statusCode': 500,
                       'headers': {
