@@ -1568,9 +1568,12 @@ Resources:
                       LIMIT 1;
                   """
           
+                  # NOTE: value must be a plain string for redshift-data
                   song_result = run_statement(
                       get_song_sql,
-                      parameters=[{"name": "song_uuid", "value": {"stringValue": song_uuid}}]
+                      parameters=[
+                          {"name": "song_uuid", "value": song_uuid}
+                      ]
                   )
           
                   records = song_result.get('Records', [])
@@ -1593,12 +1596,13 @@ Resources:
                       VALUES (:song_id, :user_id, :stream_duration);
                   """
           
+                  # Again, values must be strings; Redshift will cast
                   run_statement(
                       insert_sql,
                       parameters=[
-                          {"name": "song_id", "value": {"longValue": int(song_id)}},
-                          {"name": "user_id", "value": {"stringValue": user_id}},
-                          {"name": "stream_duration", "value": {"longValue": int(stream_duration)}},
+                          {"name": "song_id", "value": str(int(song_id))},
+                          {"name": "user_id", "value": user_id},
+                          {"name": "stream_duration", "value": str(int(stream_duration))},
                       ],
                   )
           
@@ -1623,6 +1627,7 @@ Resources:
                       },
                       'body': json.dumps(f"Error recording stream: {str(e)}")
                   }
+
       Runtime: python3.10
       Timeout: 10
       Environment:
