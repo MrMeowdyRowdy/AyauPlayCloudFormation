@@ -1416,6 +1416,7 @@ Resources:
                 Action:
                   - redshift-data:ExecuteStatement
                   - redshift-data:DescribeStatement
+                  - redshift-data:GetStatementResult
                 Resource: '*'  # Redshift Data API requires '*' for these actions
               - Effect: Allow
                 Action:
@@ -1657,6 +1658,7 @@ Resources:
                 Action:
                   - redshift-data:ExecuteStatement
                   - redshift-data:DescribeStatement
+                  - redshift-data:GetStatementResult
                 Resource: '*'  # Redshift Data API requires '*' for these actions
               - Effect: Allow
                 Action:
