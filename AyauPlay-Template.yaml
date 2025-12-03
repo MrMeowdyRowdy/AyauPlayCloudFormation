@@ -1459,7 +1459,12 @@ Resources:
           redshift_data = boto3.client('redshift-data')
           
           
-          def run_statement(sql, parameters=None):
+          def run_statement(sql, parameters=None, expect_result=False):
+              """
+              Run a Redshift Data API statement.
+              - If expect_result=True, returns GetStatementResult() output (for SELECT).
+              - If expect_result=False, just waits for completion and returns the final status.
+              """
               response = redshift_data.execute_statement(
                   ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
                   Database=os.environ['REDSHIFT_DATABASE'],
@@ -1478,7 +1483,11 @@ Resources:
                       raise Exception(status.get('Error', 'Statement failed'))
                   time.sleep(0.25)
           
-              return redshift_data.get_statement_result(Id=statement_id)
+              if expect_result:
+                  # Only SELECT (or similar) statements should set expect_result=True
+                  return redshift_data.get_statement_result(Id=statement_id)
+          
+              return status  # for INSERT/UPDATE/DELETE, etc.
           
           
           def get_user_id(event):
@@ -1569,12 +1578,13 @@ Resources:
                       LIMIT 1;
                   """
           
-                  # NOTE: value must be a plain string for redshift-data
+                  # SELECT → expect_result=True
                   song_result = run_statement(
                       get_song_sql,
                       parameters=[
                           {"name": "song_uuid", "value": song_uuid}
-                      ]
+                      ],
+                      expect_result=True,
                   )
           
                   records = song_result.get('Records', [])
@@ -1597,7 +1607,7 @@ Resources:
                       VALUES (:song_id, :user_id, :stream_duration);
                   """
           
-                  # Again, values must be strings; Redshift will cast
+                  # INSERT → expect_result=False (no GetStatementResult call)
                   run_statement(
                       insert_sql,
                       parameters=[
@@ -1605,6 +1615,7 @@ Resources:
                           {"name": "user_id", "value": user_id},
                           {"name": "stream_duration", "value": str(int(stream_duration))},
                       ],
+                      expect_result=False,
                   )
           
                   return {
