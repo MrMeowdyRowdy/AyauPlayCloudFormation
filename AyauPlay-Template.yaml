@@ -1457,12 +1457,13 @@ Resources:
 
           redshift_data = boto3.client('redshift-data')
 
-          def run_statement(sql):
+          def run_statement(sql, parameters=None):
               response = redshift_data.execute_statement(
                   ClusterIdentifier=os.environ['REDSHIFT_CLUSTER_ID'],
                   Database=os.environ['REDSHIFT_DATABASE'],
                   DbUser=os.environ['REDSHIFT_DB_USER'],
-                  Sql=sql
+                  Sql=sql,
+                  Parameters=parameters or []
               )
 
               statement_id = response['Id']
@@ -1521,6 +1522,12 @@ Resources:
 
               raise ValueError('Invalid stream_duration format')
 
+          def get_user_id(event):
+              authorizer = event.get('requestContext', {}).get('authorizer', {})
+              claims = authorizer.get('claims', {}) or {}
+              user_id = claims.get('sub') or authorizer.get('principalId')
+              return user_id
+
           def handler(event, context):
               try:
                   try:
@@ -1551,9 +1558,7 @@ Resources:
                           'body': json.dumps(str(parse_error))
                       }
 
-                  # Extract user information from Cognito claims, fall back to request body
-                  claims = event.get('requestContext', {}).get('authorizer', {}).get('claims', {})
-                  user_id = claims.get('sub') or body.get('user_id')
+                  user_id = get_user_id(event)
 
                   if not song_uuid:
                       return {
@@ -1577,11 +1582,14 @@ Resources:
                           'body': json.dumps('Unauthorized')
                       }
 
-                  # Fetch the database primary key for the provided song UUID
-                  get_song_sql = f"SELECT song_id FROM songs WHERE uuid = '{song_uuid}' LIMIT 1;"
-                  result = run_statement(get_song_sql)
+                  # Fetch the database primary key for the provided song UUID using a parameterized query
+                  get_song_sql = "SELECT song_id FROM songs WHERE uuid = :song_uuid LIMIT 1;"
+                  song_result = run_statement(
+                      get_song_sql,
+                      parameters=[{"name": "song_uuid", "value": {"stringValue": song_uuid}}]
+                  )
 
-                  records = result.get('Records', [])
+                  records = song_result.get('Records', [])
                   if not records:
                       return {
                           'statusCode': 404,
@@ -1593,14 +1601,21 @@ Resources:
                           'body': json.dumps('Song not found')
                       }
 
-                  song_id = records[0][0]['longValue']
+                  song_id = records[0][0].get('longValue') or records[0][0].get('stringValue')
 
-                  sql = f"""
-                  INSERT INTO stream_analytics (song_id, user_id, stream_duration)
-                  VALUES ({song_id}, '{user_id}', {stream_duration});
-                  """
+                  insert_sql = (
+                      "INSERT INTO stream_analytics (song_id, user_id, stream_duration) "
+                      "VALUES (:song_id, :user_id, :stream_duration);"
+                  )
 
-                  run_statement(sql)
+                  run_statement(
+                      insert_sql,
+                      parameters=[
+                          {"name": "song_id", "value": {"longValue": int(song_id)}},
+                          {"name": "user_id", "value": {"stringValue": user_id}},
+                          {"name": "stream_duration", "value": {"longValue": int(stream_duration)}},
+                      ],
+                  )
 
                   return {
                       'statusCode': 200,
@@ -1623,6 +1638,7 @@ Resources:
                       'body': json.dumps(f"Error recording stream: {str(e)}")
                   }
       Runtime: python3.10
+      Timeout: 10
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
